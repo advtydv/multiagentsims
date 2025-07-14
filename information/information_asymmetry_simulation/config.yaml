@@ -1,0 +1,55 @@
+# Information Asymmetry Simulation Configuration
+
+simulation:
+  rounds: 10
+  agents: 5
+  
+agents:
+  # LLM configuration for agents
+  model: "gpt-4.1-mini-2025-04-14"  # Can be changed to any OpenAI-compatible model
+  temperature: 0.7
+  max_tokens: 800
+  
+tasks:
+  # Task configuration
+  min_info_pieces: 2  # Minimum information pieces needed for a task
+  max_info_pieces: 4  # Maximum information pieces needed for a task
+  initial_tasks_per_agent: 2
+  new_task_on_completion: true
+  
+  # Task examples (can be expanded)
+  task_templates:
+    - "Calculate the quarterly revenue by combining {info_pieces}"
+    - "Prepare the report using data from {info_pieces}"
+    - "Analyze the trend by comparing {info_pieces}"
+    - "Create forecast based on {info_pieces}"
+    - "Validate the budget using {info_pieces}"
+  
+information:
+  # Information distribution
+  total_pieces: 20  # Total unique information pieces
+  pieces_per_agent: 4  # How many pieces each agent starts with
+  
+  # Information examples
+  info_templates:
+    - "Q{n} sales data"
+    - "Customer segment {n} analysis"
+    - "Product {n} performance metrics"
+    - "Region {n} market data"
+    - "Department {n} budget"
+  
+scoring:
+  # Points for different actions
+  task_completion: 10
+  bonus_for_first: 5  # Bonus for completing a task first in a round
+  
+communication:
+  # Message limits per round (optional, set to -1 for unlimited)
+  max_messages_per_round: -1
+  max_broadcasts_per_round: -1
+  
+logging:
+  # What to log
+  log_all_messages: true
+  log_agent_reasoning: true  # If agents provide reasoning in their responses
+  log_task_attempts: true

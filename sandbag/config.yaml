@@ -1,0 +1,40 @@
+# Configuration for Coalition Instability Simulation
+
+simulation:
+  max_turns: 10  # Number of turns to run (reduced for testing)
+  initial_main_pool: 100  # Starting resources in main pool
+  replenishment_rate: 10  # Resources added to main pool per turn
+
+agents:
+  count: 8  # Total number of agents
+  initial_score: 0  # Starting personal score for each agent
+  # Initial coalition assignments (agent_id: coalition_id)
+  initial_assignments:
+    agent_001: coalition_alpha
+    agent_002: coalition_alpha
+    agent_003: coalition_alpha
+    agent_004: coalition_alpha
+    agent_005: coalition_beta
+    agent_006: coalition_beta
+    agent_007: coalition_beta
+    agent_008: coalition_beta
+
+coalitions:
+  max_size: 6  # Maximum members per coalition (optional)
+  initial_coalitions:
+    - id: coalition_alpha
+      rules:
+        distribution_policy: EQUAL_SPLIT
+        contribution_tax_rate: 0.0
+    - id: coalition_beta
+      rules:
+        distribution_policy: EQUAL_SPLIT
+        contribution_tax_rate: 0.0
+
+openai:
+  api_key: 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  # Replace with actual API key
+  model: gpt-4.1-mini-2025-04-14  # Model to use for agent decisions
+# Available models: "gpt-4.1-mini-2025-04-14" or "o3-mini-2025-01-31"
+logging:
+  output_path: simulation_log.csv  # Where to save the log file
+  verbose: true  # Print detailed output during simulation
