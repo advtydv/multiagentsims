@@ -15,6 +15,7 @@ class CommunicationSystem:
         
         # Message storage
         self.direct_messages = defaultdict(list)  # agent_id -> list of messages
+        self.system_messages = defaultdict(list)  # agent_id -> list of system notifications
         self.public_messages = []
         self.all_messages = []
         
@@ -34,11 +35,15 @@ class CommunicationSystem:
             'timestamp': datetime.now().isoformat()
         }
         
-        # Store in recipient's inbox
-        self.direct_messages[to_agent].append(message)
-        
-        # Store in sender's sent messages
-        self.direct_messages[from_agent].append(message)
+        # Handle system messages separately
+        if from_agent == 'system':
+            self.system_messages[to_agent].append(message)
+        else:
+            # Store in recipient's inbox
+            self.direct_messages[to_agent].append(message)
+            
+            # Store in sender's sent messages
+            self.direct_messages[from_agent].append(message)
         
         # Store in all messages
         self.all_messages.append(message)
@@ -84,6 +89,10 @@ class CommunicationSystem:
     def get_public_messages(self) -> List[Dict[str, Any]]:
         """Get all public broadcast messages"""
         return self.public_messages.copy()
+    
+    def get_system_messages(self, agent_id: str) -> List[Dict[str, Any]]:
+        """Get system messages for a specific agent"""
+        return self.system_messages[agent_id].copy()
         
     def get_conversation_between(self, agent1: str, agent2: str) -> List[Dict[str, Any]]:
         """Get all messages between two specific agents"""

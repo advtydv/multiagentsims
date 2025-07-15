@@ -59,13 +59,47 @@ class SimulationLogger:
         
     def log_agent_action(self, agent_id: str, round_num: int, action: Dict[str, Any]):
         """Log an agent's action"""
+        # Extract private thoughts if present
+        private_thoughts = action.get('private_thoughts', 'Not provided')
+        
         event = {
             'timestamp': datetime.now().isoformat(),
             'event_type': 'agent_action',
             'data': {
                 'round': round_num,
                 'agent_id': agent_id,
-                'action': action
+                'action': action,
+                'private_thoughts': private_thoughts
+            }
+        }
+        self.log_file.write(json.dumps(event) + '\n')
+        self.log_file.flush()
+        
+        # Also log private thoughts as a separate event for easier analysis
+        if private_thoughts != 'Not provided' and private_thoughts != 'No private thoughts provided':
+            thought_event = {
+                'timestamp': datetime.now().isoformat(),
+                'event_type': 'private_thoughts',
+                'data': {
+                    'round': round_num,
+                    'agent_id': agent_id,
+                    'thoughts': private_thoughts,
+                    'action_type': action.get('action', 'unknown')
+                }
+            }
+            self.log_file.write(json.dumps(thought_event) + '\n')
+            self.log_file.flush()
+    
+    def log_private_thoughts(self, agent_id: str, round_num: int, thoughts: str, context: str = ""):
+        """Log private thoughts separately"""
+        event = {
+            'timestamp': datetime.now().isoformat(),
+            'event_type': 'private_thoughts',
+            'data': {
+                'round': round_num,
+                'agent_id': agent_id,
+                'thoughts': thoughts,
+                'context': context
             }
         }
         self.log_file.write(json.dumps(event) + '\n')

@@ -70,6 +70,17 @@ class InformationManager:
     def get_agent_information(self, agent_id: str) -> Set[str]:
         """Get information held by a specific agent"""
         return self.agent_information.get(agent_id, set())
+    
+    def update_agent_information(self, agent_id: str, new_info: Set[str]):
+        """Update the information held by a specific agent"""
+        self.agent_information[agent_id] = new_info
+    
+    def transfer_information(self, from_agent: str, to_agent: str, info_pieces: List[str]):
+        """Update the directory when information is transferred between agents"""
+        # Add information to recipient
+        for piece in info_pieces:
+            self.agent_information[to_agent].add(piece)
+        # Note: We don't remove from sender as they still have the information
 
 
 class TaskManager:

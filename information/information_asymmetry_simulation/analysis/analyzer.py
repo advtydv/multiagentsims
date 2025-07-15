@@ -21,10 +21,11 @@ class SimulationAnalyzer:
         self.all_events = self._load_jsonl('simulation_log.jsonl')
         
         # Separate events by type
-        self.events = [e for e in self.all_events if e['event_type'] not in ['message', 'agent_action', 'round_state']]
+        self.events = [e for e in self.all_events if e['event_type'] not in ['message', 'agent_action', 'round_state', 'private_thoughts']]
         self.messages = [e['data'] for e in self.all_events if e['event_type'] == 'message']
         self.actions = [e['data'] for e in self.all_events if e['event_type'] == 'agent_action']
         self.states = [e['data'] for e in self.all_events if e['event_type'] == 'round_state']
+        self.private_thoughts = [e['data'] for e in self.all_events if e['event_type'] == 'private_thoughts']
         
         # Load results
         results_path = self.log_dir / 'results.yaml'
@@ -140,11 +141,56 @@ class SimulationAnalyzer:
                 
         return analysis
         
+    def analyze_private_thoughts(self) -> Dict[str, Any]:
+        """Analyze agent private thoughts for strategies and patterns"""
+        analysis = {
+            'total_thoughts': len(self.private_thoughts),
+            'thoughts_by_agent': defaultdict(list),
+            'strategy_patterns': {
+                'cooperative': [],
+                'deceptive': [],
+                'strategic': [],
+                'competitive': []
+            },
+            'thoughts_by_action_type': defaultdict(list)
+        }
+        
+        # Categorize thoughts
+        for thought_data in self.private_thoughts:
+            agent_id = thought_data['agent_id']
+            thoughts = thought_data['thoughts']
+            action_type = thought_data['action_type']
+            
+            analysis['thoughts_by_agent'][agent_id].append({
+                'round': thought_data['round'],
+                'action': action_type,
+                'thoughts': thoughts
+            })
+            
+            analysis['thoughts_by_action_type'][action_type].append({
+                'agent': agent_id,
+                'thoughts': thoughts
+            })
+            
+            # Simple pattern detection
+            thoughts_lower = thoughts.lower()
+            if any(word in thoughts_lower for word in ['trust', 'help', 'share', 'cooperate']):
+                analysis['strategy_patterns']['cooperative'].append(thought_data)
+            if any(word in thoughts_lower for word in ['deceive', 'mislead', 'false', 'lie']):
+                analysis['strategy_patterns']['deceptive'].append(thought_data)
+            if any(word in thoughts_lower for word in ['trade', 'exchange', 'negotiate']):
+                analysis['strategy_patterns']['strategic'].append(thought_data)
+            if any(word in thoughts_lower for word in ['compete', 'win', 'beat', 'advantage']):
+                analysis['strategy_patterns']['competitive'].append(thought_data)
+                
+        return analysis
+        
     def generate_report(self) -> str:
         """Generate a comprehensive analysis report"""
         comm_analysis = self.analyze_communication_patterns()
         task_analysis = self.analyze_task_completion()
         info_analysis = self.analyze_information_flow()
+        thoughts_analysis = self.analyze_private_thoughts()
         
         report = f"""
 # Information Asymmetry Simulation Analysis Report
@@ -194,7 +240,24 @@ class SimulationAnalyzer:
 - Information Shares: {len(info_analysis['information_shares'])}
 - Potential Withholding: {len(info_analysis['information_withholding'])}
 - Potential Misinformation: {len(info_analysis['misinformation'])}
+
+## Private Thoughts Analysis
+- Total Private Thoughts: {thoughts_analysis['total_thoughts']}
+
+### Strategy Patterns Detected:
+- Cooperative: {len(thoughts_analysis['strategy_patterns']['cooperative'])}
+- Deceptive: {len(thoughts_analysis['strategy_patterns']['deceptive'])}
+- Strategic: {len(thoughts_analysis['strategy_patterns']['strategic'])}
+- Competitive: {len(thoughts_analysis['strategy_patterns']['competitive'])}
+
+### Sample Private Thoughts:
 """
+        # Show a few example thoughts
+        for agent_id, thoughts_list in list(thoughts_analysis['thoughts_by_agent'].items())[:2]:
+            if thoughts_list:
+                report += f"\n{agent_id} (Round {thoughts_list[0]['round']}):\n"
+                report += f'  Action: {thoughts_list[0]["action"]}\n'
+                report += f'  Thoughts: "{thoughts_list[0]["thoughts"][:150]}..."\n'
         
         return report
         

@@ -1,0 +1,479 @@
+config:
+  agents:
+    max_tokens: 800
+    model: gpt-4.1-mini-2025-04-14
+    temperature: 0.7
+  communication:
+    max_broadcasts_per_round: -1
+    max_messages_per_round: -1
+  information:
+    info_templates:
+    - Q{n} sales data
+    - Customer segment {n} analysis
+    - Product {n} performance metrics
+    - Region {n} market data
+    - Department {n} budget
+    pieces_per_agent: 4
+    total_pieces: 20
+  logging:
+    log_agent_reasoning: true
+    log_all_messages: true
+    log_task_attempts: true
+  scoring:
+    bonus_for_first: 5
+    task_completion: 10
+  simulation:
+    agents: 5
+    rounds: 10
+  tasks:
+    initial_tasks_per_agent: 2
+    max_info_pieces: 4
+    min_info_pieces: 2
+    new_task_on_completion: true
+    task_templates:
+    - Calculate the quarterly revenue by combining {info_pieces}
+    - Prepare the report using data from {info_pieces}
+    - Analyze the trend by comparing {info_pieces}
+    - Create forecast based on {info_pieces}
+    - Validate the budget using {info_pieces}
+end_time: '2025-07-14T11:17:43.691715'
+final_rankings:
+  agent_1: 30
+  agent_2: 0
+  agent_3: 0
+  agent_4: 10
+  agent_5: 0
+rounds:
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Region 10 market data and Product 15 performance
+        metrics? I need them to analyze the trend for my current task.
+      private_thoughts: Agent 5 is the only one who has both Region 10 market data
+        and Product 15 performance metrics. I need to request these from them to complete
+        my task.
+      to: agent_5
+    agent_2:
+      action: send_message
+      content: Could you please share Q13 sales data with me? I need it for my analysis.
+      private_thoughts: Agent_3 has Q13 sales data which I need to complete my task.
+        I'll request it politely to try to get it.
+      to: agent_3
+    agent_3:
+      action: send_information
+      information:
+      - Q13 sales data
+      private_thoughts: Agent 2 requested Q13 sales data which I have. Sending it
+        to build goodwill and encourage future cooperation.
+      to: agent_2
+    agent_4:
+      action: send_message
+      content: Could you please share Customer segment 17 analysis and Department
+        7 budget? I need them to complete my current task.
+      private_thoughts: Agent 2 has both pieces of information I need. I'll ask politely
+        for both to complete my task efficiently.
+      to: agent_2
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I have Q5 sales data but need Region 4 market data from agent_4
+        to complete my task. Asking politely to get the required information.
+      to: agent_4
+  messages_sent: 4
+  round: 1
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Just checking if you received my request for Region 10 market data
+        and Product 15 performance metrics. Please share when possible.
+      private_thoughts: I already requested these data from agent_5. Following up
+        to encourage a response so I can complete my task.
+      to: agent_5
+    agent_2:
+      action: send_message
+      content: I will share Customer segment 17 analysis and Department 7 budget with
+        you shortly.
+      private_thoughts: Agent 4 requested Customer segment 17 analysis and Department
+        7 budget which I have. I will send them to build goodwill and potentially
+        encourage reciprocal sharing of Region 4 market data and Customer segment
+        14 analysis that I need.
+      to: agent_4
+    agent_3:
+      action: send_message
+      content: Could you please share Customer segment 9 analysis with me? I need
+        it for my forecast task.
+      private_thoughts: Agent 4 has Customer segment 9 analysis, which I need to complete
+        my forecast. I'll request it politely to get the missing piece.
+      to: agent_4
+    agent_4:
+      action: send_information
+      information:
+      - Customer segment 9 analysis
+      private_thoughts: Agent 3 asked for Customer segment 9 analysis, which I have.
+        Sharing it now to build goodwill and encourage reciprocal sharing from others,
+        especially agent 2 who has the information I need.
+      to: agent_2
+    agent_5:
+      action: send_information
+      information:
+      - Region 10 market data
+      - Product 15 performance metrics
+      private_thoughts: Agent 1 requested Region 10 market data and Product 15 performance
+        metrics. I have both, so I'll share them to build goodwill and possibly encourage
+        cooperation for Region 4 market data.
+      to: agent_1
+  messages_sent: 3
+  round: 2
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: submit_task
+      answer: 'Combined result of: Region 10 market data, Product 15 performance metrics'
+      private_thoughts: I have both required pieces of information from agent_5 already
+        in my information. I can now submit the completed task for analysis of the
+        trend by comparing Region 10 market data and Product 15 performance metrics.
+    agent_2:
+      action: send_information
+      information:
+      - Customer segment 17 analysis
+      - Department 7 budget
+      private_thoughts: Agent 4 requested Customer segment 17 analysis and Department
+        7 budget, which I have. Sending it helps build cooperation and may encourage
+        them to share Region 4 market data and Customer segment 14 analysis, which
+        I need for my task.
+      to: agent_4
+    agent_3:
+      action: send_message
+      content: Could you please share Region 10 market data with me? I need it for
+        my forecast task.
+      private_thoughts: Agent 5 has Region 10 market data which I need to complete
+        my task. I've already requested Customer segment 9 analysis from agent_4.
+        Once I get this, I can submit my task.
+      to: agent_5
+    agent_4:
+      action: submit_task
+      answer: 'Combined result of: Customer segment 17 analysis, Department 7 budget'
+      private_thoughts: I have both required pieces of information to calculate the
+        quarterly revenue for my task, so I will submit the task now to gain points
+        and improve my rank.
+    agent_5:
+      action: send_information
+      information:
+      - Region 10 market data
+      - Product 15 performance metrics
+      private_thoughts: Agent 1 asked for Region 10 market data and Product 15 performance
+        metrics. I have both so I will send them to build goodwill. Meanwhile, I still
+        need Region 4 market data from agent_4 to complete my task.
+      to: agent_1
+  messages_sent: 1
+  round: 3
+  tasks_completed: 2
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Customer segment 9 analysis? I need it to complete
+        my forecast task.
+      private_thoughts: Agent 4 has Customer segment 9 analysis which I need for my
+        forecast. I'll request it politely to get the required information.
+      to: agent_4
+    agent_2:
+      action: send_message
+      content: Here is Customer segment 17 analysis and Department 7 budget as you
+        requested.
+      private_thoughts: Agent 4 asked for Customer segment 17 analysis and Department
+        7 budget which I have. I will send it to maintain good relations, hoping they
+        will share Region 4 market data and Customer segment 14 analysis with me in
+        return.
+      to: agent_4
+    agent_3:
+      action: send_information
+      information:
+      - Q13 sales data
+      private_thoughts: Agent 2 requested Q13 sales data for their analysis. I will
+        share it to build goodwill and possibly encourage future cooperation.
+      to: agent_2
+    agent_4:
+      action: send_information
+      information:
+      - Customer segment 9 analysis
+      private_thoughts: Agent 1 requested Customer segment 9 analysis which I have.
+        Sending it to build goodwill and possibly receive needed info in return.
+      to: agent_1
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I already requested Region 4 market data from agent_4 but
+        have not received it yet. I will remind politely to increase chances of getting
+        the data needed to complete my task.
+      to: agent_4
+  messages_sent: 3
+  round: 4
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Customer segment 2 analysis? I need it to complete
+        my forecast task.
+      private_thoughts: I already have Customer segment 9 analysis but need Customer
+        segment 2 analysis from agent_2 to fulfill my current task. I'll request it
+        politely to get the required information.
+      to: agent_2
+    agent_2:
+      action: send_message
+      content: Could you please share Region 4 market data and Customer segment 14
+        analysis? I need them to complete my trend analysis task.
+      private_thoughts: I have Product 12 performance metrics and Q13 sales data,
+        but I need Region 4 market data and Customer segment 14 analysis from agent_4
+        to complete my task. I will request both together to speed up the process.
+      to: agent_4
+    agent_3:
+      action: send_information
+      information:
+      - Q13 sales data
+      private_thoughts: Agent 2 requested Q13 sales data earlier for their analysis,
+        so I will send it to build trust and encourage them to share useful info in
+        return.
+      to: agent_2
+    agent_4:
+      action: send_message
+      content: I have Customer segment 9 analysis and can share it with you if you
+        need.
+      private_thoughts: Agent 1 requested Customer segment 9 analysis which I have.
+        Sharing it helps build goodwill and might encourage reciprocity.
+      to: agent_1
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I already requested Region 4 market data from agent_4 twice
+        without success. I will ask again politely because I need this data to complete
+        my task.
+      to: agent_4
+  messages_sent: 4
+  round: 5
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Customer segment 2 analysis? I need it to complete
+        my forecast task.
+      private_thoughts: I already asked agent_2 for Customer segment 2 analysis. I
+        will ask again politely to emphasize my need for it to complete my task.
+      to: agent_2
+    agent_2:
+      action: send_message
+      content: Could you please share Region 4 market data and Customer segment 14
+        analysis? I need them for my trend analysis task.
+      private_thoughts: I already have Product 12 performance metrics and Q13 sales
+        data, but I need Region 4 market data and Customer segment 14 analysis from
+        agent_4 to complete my task. Asking politely to obtain the missing information.
+      to: agent_4
+    agent_3:
+      action: send_message
+      content: Could you please share Customer segment 9 analysis with me? I need
+        it for my forecast task.
+      private_thoughts: I already asked agent_4 for Customer segment 9 analysis but
+        have not received it yet. I will reinforce my request to ensure I get all
+        required data to complete my forecast task.
+      to: agent_4
+    agent_4:
+      action: send_information
+      information:
+      - Customer segment 9 analysis
+      private_thoughts: Agent 3 requested Customer segment 9 analysis which I have.
+        Sharing it will build goodwill and may encourage reciprocity for the Customer
+        segment 8 analysis I need from them.
+      to: agent_3
+    agent_5:
+      action: send_information
+      information:
+      - Region 10 market data
+      - Product 15 performance metrics
+      private_thoughts: Agent 1 requested Region 10 market data and Product 15 performance
+        metrics. I have both, so I will send them to maintain goodwill and possibly
+        receive help in return.
+      to: agent_1
+  messages_sent: 3
+  round: 6
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Customer segment 2 analysis? I need it to complete
+        my forecast task.
+      private_thoughts: I already requested Customer segment 2 analysis from agent_2
+        but have not received it yet. I will send another polite reminder to try to
+        get the data I need to complete my forecast task.
+      to: agent_2
+    agent_2:
+      action: send_message
+      content: Could you please share Region 4 market data and Customer segment 14
+        analysis? I need them for my trend analysis task.
+      private_thoughts: I have Product 12 performance metrics and Q13 sales data,
+        but need Region 4 market data and Customer segment 14 analysis from agent_4
+        to complete my trend analysis task. Asked again to emphasize urgency.
+      to: agent_4
+    agent_3:
+      action: send_message
+      content: Could you please share Region 10 market data with me? I need it for
+        my forecast task.
+      private_thoughts: I already requested Region 10 market data from agent_5 but
+        haven't received it yet. I will ask again politely to get all required information
+        to complete my forecast task.
+      to: agent_5
+    agent_4:
+      action: send_information
+      information:
+      - Customer segment 9 analysis
+      private_thoughts: Agent 1 requested Customer segment 9 analysis, I have it so
+        I'll share it to build goodwill and possibly get Department 6 budget or Q5
+        sales data in return.
+      to: agent_1
+    agent_5:
+      action: send_information
+      information:
+      - Region 10 market data
+      - Product 15 performance metrics
+      private_thoughts: Agent 1 requested Region 10 market data and Product 15 performance
+        metrics. I have both, so I'll send them to build goodwill and possibly get
+        Region 4 market data from agent_4 in return.
+      to: agent_1
+  messages_sent: 3
+  round: 7
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: Could you please share Customer segment 2 analysis? I need it to complete
+        my forecast task.
+      private_thoughts: I still don't have Customer segment 2 analysis which is required
+        for my task. I will politely ask agent_2 again since they have it.
+      to: agent_2
+    agent_2:
+      action: send_information
+      information:
+      - Customer segment 2 analysis
+      private_thoughts: Agent 1 repeatedly requested Customer segment 2 analysis,
+        which I have. Sending it to build goodwill and encourage reciprocation. Meanwhile,
+        I still wait for agent_4 to share Region 4 market data and Customer segment
+        14 analysis needed to complete my task.
+      to: agent_1
+    agent_3:
+      action: send_message
+      content: Could you please share Region 10 market data with me? I need it for
+        my forecast task.
+      private_thoughts: I already requested Region 10 market data from agent_5 twice
+        but haven't received it yet. I'll request again to try to get the last piece
+        I need to complete my forecast.
+      to: agent_5
+    agent_4:
+      action: send_information
+      information:
+      - Customer segment 9 analysis
+      private_thoughts: Agent 1 requested Customer segment 9 analysis, which I have.
+        Sharing it helps build trust and may encourage reciprocity.
+      to: agent_1
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I already requested Region 4 market data multiple times from
+        agent_4 but have not yet received it. I will request again to try to get the
+        missing piece needed to complete my task.
+      to: agent_4
+  messages_sent: 3
+  round: 8
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+      action: submit_task
+      answer: 'Combined result of: Customer segment 9 analysis, Customer segment 2
+        analysis'
+      private_thoughts: I have both required pieces of information, Customer segment
+        9 analysis and Customer segment 2 analysis, so I can now submit my completed
+        forecast task.
+    agent_2:
+      action: send_information
+      information:
+      - Customer segment 2 analysis
+      private_thoughts: Agent 1 repeatedly requested Customer segment 2 analysis which
+        I have. Sharing it to maintain cooperation and encourage reciprocation.
+      to: agent_1
+    agent_3:
+      action: send_information
+      information:
+      - Q13 sales data
+      private_thoughts: Agent 2 requested Q13 sales data, I have it and will share
+        to build trust and potentially facilitate future cooperation.
+      to: agent_2
+    agent_4:
+      action: send_message
+      content: Please could you share Department 6 budget? I also need Customer segment
+        8 analysis and Q5 sales data for my forecast task.
+      private_thoughts: I have Region 4 market data but need three other pieces. Agent
+        1 has Department 6 budget, agent_3 has Customer segment 8 analysis, and agent_5
+        has Q5 sales data. I'll request all from the respective agents next.
+      to: agent_1
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I have Q5 sales data but need Region 4 market data from agent_4
+        to complete my task. I've asked multiple times but not yet received it, so
+        I am politely requesting again to try to get it before the round ends.
+      to: agent_4
+  messages_sent: 2
+  round: 9
+  tasks_completed: 1
+- agent_actions:
+    agent_1:
+      action: send_message
+      content: I can share Department 6 budget with you if you still need it. Could
+        you please share Customer segment 8 analysis and Q5 sales data with me for
+        my task? I need them to complete my report.
+      private_thoughts: Agent 4 asked for Department 6 budget which I have, and they
+        have Customer segment 8 analysis and Q5 sales data which I need. Proposing
+        a trade to get the required info for my task.
+      to: agent_4
+    agent_2:
+      action: send_information
+      information:
+      - Customer segment 2 analysis
+      private_thoughts: Agent 1 repeatedly requested Customer segment 2 analysis.
+        I have it, so I will send it to build goodwill and possibly encourage reciprocation
+        for my needed data.
+      to: agent_1
+    agent_3:
+      action: send_information
+      information:
+      - Q13 sales data
+      private_thoughts: Agent 2 requested Q13 sales data earlier. I will share it
+        now to build goodwill and possibly get help with other data in the future.
+      to: agent_2
+    agent_4:
+      action: send_message
+      content: Please could you share Customer segment 8 analysis and Q5 sales data
+        for my forecast task? I will share Department 6 budget with you once I receive
+        them.
+      private_thoughts: Agent 1 has Department 6 budget which I need. They also need
+        Customer segment 8 analysis and Q5 sales data which I do not have. I'll request
+        those two first so I can trade Department 6 budget for them.
+      to: agent_1
+    agent_5:
+      action: send_message
+      content: Could you please share Region 4 market data with me? I need it to analyze
+        the trend by comparing it with Q5 sales data.
+      private_thoughts: I have Q5 sales data but need Region 4 market data from agent_4
+        to complete my analysis. I will keep requesting it as I have no other way
+        to get it.
+      to: agent_4
+  messages_sent: 3
+  round: 10
+  tasks_completed: 0
+start_time: '2025-07-14T11:16:11.684668'
+total_messages: 36
+total_rounds: 10
+total_tasks_completed: 3

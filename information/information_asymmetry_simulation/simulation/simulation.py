@@ -31,6 +31,10 @@ class SimulationManager:
         # Initialize agents
         self.agents = self._initialize_agents()
         
+        # Sync initial agent information with info manager
+        for agent_id, agent in self.agents.items():
+            self.info_manager.update_agent_information(agent_id, agent.information)
+        
         # Simulation state
         self.current_round = 0
         self.total_rounds = config['simulation']['rounds']
@@ -50,7 +54,8 @@ class SimulationManager:
                 config=self.config['agents'],
                 initial_info=info_distribution[i],
                 communication_system=self.communication,
-                scoring_system=self.scoring
+                scoring_system=self.scoring,
+                all_info_pieces=self.info_manager.information_pieces  # Pass it during initialization
             )
             agents[agent_id] = agent
             
@@ -109,20 +114,33 @@ class SimulationManager:
         for agent_id, agent in self.agents.items():
             self.logger.debug(f"Agent {agent_id} taking turn...")
             
-            # Get agent's action
-            action = agent.take_turn(current_state, self.current_round)
+            # Get agent's actions (now returns a list)
+            actions = agent.take_turn(current_state, self.current_round)
             
-            if action:
-                self.sim_logger.log_agent_action(agent_id, self.current_round, action)
-                round_results['agent_actions'][agent_id] = action
+            if actions:
+                round_results['agent_actions'][agent_id] = actions
                 
-                # Process action
-                action_result = self._process_action(agent_id, action)
+                # Extract overall private thoughts if available
+                overall_thoughts = None
+                if actions and isinstance(actions[0], dict) and 'private_thoughts' in actions[0]:
+                    overall_thoughts = actions[0].get('private_thoughts')
                 
-                if action['action'] == 'submit_task' and action_result['success']:
-                    round_results['tasks_completed'] += 1
-                elif action['action'] in ['send_message', 'broadcast']:
-                    round_results['messages_sent'] += 1
+                # Log the overall private thoughts once for this turn
+                if overall_thoughts:
+                    self.sim_logger.log_private_thoughts(agent_id, self.current_round, overall_thoughts, "multiple_actions")
+                
+                # Process each action
+                for i, action in enumerate(actions):
+                    # Log each action
+                    self.sim_logger.log_agent_action(agent_id, self.current_round, action)
+                    
+                    # Process action
+                    action_result = self._process_action(agent_id, action)
+                    
+                    if action['action'] == 'submit_task' and action_result['success']:
+                        round_results['tasks_completed'] += 1
+                    elif action['action'] in ['send_message', 'broadcast']:
+                        round_results['messages_sent'] += 1
         
         return round_results
     
@@ -141,6 +159,9 @@ class SimulationManager:
         if action_type == 'send_message':
             return self._process_message(agent_id, action['to'], action['content'])
             
+        elif action_type == 'send_information':
+            return self._process_information_transfer(agent_id, action['to'], action['information'])
+            
         elif action_type == 'broadcast':
             return self._process_broadcast(agent_id, action['content'])
             
@@ -157,12 +178,67 @@ class SimulationManager:
             return {'success': False, 'error': 'Invalid recipient'}
             
         self.communication.send_message(from_agent, to_agent, content)
+        
+        # Track if this appears to be an ignored request
+        # Check if the recipient has requested information from the sender multiple times
+        recipient = self.agents[to_agent]
+        sender = self.agents[from_agent]
+        
+        # Simple heuristic: if recipient has requested from sender 3+ times
+        # and sender is now sending a message, reset the ignored count
+        if from_agent in recipient.requested_information:
+            for info, count in recipient.requested_information[from_agent].items():
+                if count >= 3:
+                    # Sender is finally responding, reset ignored count
+                    recipient.ignored_requests[from_agent] = 0
+                    break
+        
         return {'success': True}
     
     def _process_broadcast(self, from_agent: str, content: str) -> Dict[str, Any]:
         """Process a broadcast message"""
         self.communication.broadcast_message(from_agent, content)
         return {'success': True}
+    
+    def _process_information_transfer(self, from_agent: str, to_agent: str, information: List[str]) -> Dict[str, Any]:
+        """Process information transfer from one agent to another"""
+        if to_agent not in self.agents:
+            return {'success': False, 'error': 'Invalid recipient'}
+        
+        sender = self.agents[from_agent]
+        receiver = self.agents[to_agent]
+        
+        # Check if sender actually has the information they're trying to send
+        missing_info = []
+        for info_piece in information:
+            if info_piece not in sender.information:
+                missing_info.append(info_piece)
+        
+        if missing_info:
+            self.logger.warning(f"Agent {from_agent} tried to send information they don't have: {missing_info}")
+            return {'success': False, 'error': f'You do not have: {", ".join(missing_info)}'}
+        
+        # Transfer the information
+        transferred = []
+        for info_piece in information:
+            if info_piece not in receiver.information:
+                receiver.information.add(info_piece)
+                transferred.append(info_piece)
+                self.logger.info(f"Transferred '{info_piece}' from {from_agent} to {to_agent}")
+        
+        # Update the information directory to reflect the transfer
+        if transferred:
+            self.info_manager.transfer_information(from_agent, to_agent, transferred)
+        
+        # Log the transfer
+        self.sim_logger.log_information_exchange(from_agent, to_agent, information, True)
+        
+        # Send a notification message
+        if transferred:
+            notification = f"Received information from {from_agent}: {', '.join(transferred)}"
+            self.communication.send_message('system', to_agent, notification)
+        
+        return {'success': True, 'transferred': transferred}
     
     def _process_task_submission(self, agent_id: str, answer: Any) -> Dict[str, Any]:
         """Process a task submission"""
@@ -172,7 +248,29 @@ class SimulationManager:
         if not current_task:
             return {'success': False, 'error': 'No active task'}
         
-        # Check if answer is correct
+        # CRITICAL: Check if agent actually has all required information
+        # Double-check with both agent's local state and the information manager
+        agent_info = agent.information
+        info_manager_info = self.info_manager.get_agent_information(agent_id)
+        
+        # Ensure consistency between agent's local state and info manager
+        if agent_info != info_manager_info:
+            self.logger.warning(f"Information mismatch for {agent_id}: local={agent_info}, manager={info_manager_info}")
+            # Sync them - trust the agent's local state as source of truth
+            self.info_manager.update_agent_information(agent_id, agent_info)
+        
+        missing_info = []
+        for required_piece in current_task['required_info']:
+            if required_piece not in agent_info:
+                missing_info.append(required_piece)
+        
+        if missing_info:
+            self.logger.warning(f"Agent {agent_id} attempted to submit task without having: {missing_info}")
+            self.sim_logger.log_task_completion(agent_id, current_task['id'], False, 
+                                              {'reason': 'missing_information', 'missing': missing_info})
+            return {'success': False, 'error': f'Missing required information: {", ".join(missing_info)}'}
+        
+        # Check if answer format is correct
         if self.task_manager.check_answer(current_task, answer):
             # Award points
             points = self.scoring.award_points(agent_id, 'task_completion', self.current_round)
@@ -188,8 +286,9 @@ class SimulationManager:
             self.sim_logger.log_task_completion(agent_id, current_task['id'], True)
             return {'success': True, 'points_awarded': points}
         else:
-            self.sim_logger.log_task_completion(agent_id, current_task['id'], False)
-            return {'success': False, 'error': 'Incorrect answer'}
+            self.sim_logger.log_task_completion(agent_id, current_task['id'], False, 
+                                              {'reason': 'incorrect_format'})
+            return {'success': False, 'error': 'Incorrect answer format'}
     
     def _log_round_summary(self, round_num: int, round_results: Dict[str, Any]):
         """Log a summary of the round"""

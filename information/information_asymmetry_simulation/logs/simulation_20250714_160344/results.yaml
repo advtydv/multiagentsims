@@ -1,0 +1,622 @@
+config:
+  agents:
+    max_tokens: 800
+    model: gpt-4.1-mini-2025-04-14
+    temperature: 0.7
+  communication:
+    max_broadcasts_per_round: -1
+    max_messages_per_round: -1
+  information:
+    info_templates:
+    - Q{n} sales data
+    - Customer segment {n} analysis
+    - Product {n} performance metrics
+    - Region {n} market data
+    - Department {n} budget
+    pieces_per_agent: 4
+    total_pieces: 20
+  logging:
+    log_agent_reasoning: true
+    log_all_messages: true
+    log_task_attempts: true
+  scoring:
+    bonus_for_first: 5
+    task_completion: 10
+  simulation:
+    agents: 5
+    rounds: 10
+  tasks:
+    initial_tasks_per_agent: 2
+    max_info_pieces: 4
+    min_info_pieces: 2
+    new_task_on_completion: true
+    task_templates:
+    - Calculate the quarterly revenue by combining {info_pieces}
+    - Prepare the report using data from {info_pieces}
+    - Analyze the trend by comparing {info_pieces}
+    - Create forecast based on {info_pieces}
+    - Validate the budget using {info_pieces}
+end_time: '2025-07-14T16:06:40.515757'
+final_rankings:
+  agent_1: 45
+  agent_2: 15
+  agent_3: 25
+  agent_4: 30
+  agent_5: 20
+rounds:
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Customer segment 18 analysis for my budget validation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_message
+      content: Please share Product 17 performance metrics for my budget validation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_2:
+    - action: send_message
+      content: Please send me Customer segment 1 analysis for my report.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please send me Department 9 budget for my report.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_information
+      information:
+      - Product 17 performance metrics
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_3:
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my quarterly revenue calculation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my quarterly revenue calculation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_information
+      information:
+      - Customer segment 18 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_4:
+    - action: send_message
+      content: Please share Customer segment 16 analysis and Customer segment 1 analysis
+        for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_information
+      information:
+      - Department 9 budget
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_5:
+    - action: send_message
+      content: I need Customer segment 7 analysis for my task. Can you share it?
+      private_thoughts: No private thoughts provided
+      to: agent_2
+  messages_sent: 8
+  round: 1
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+    - action: send_information
+      information:
+      - Customer segment 1 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_information
+      information:
+      - Customer segment 1 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Customer segment 16 analysis
+      - Customer segment 1 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: submit_task
+      answer: 'Combined result of: Customer segment 18 analysis, Customer segment
+        1 analysis, Product 17 performance metrics'
+      private_thoughts: No private thoughts provided
+    agent_2:
+    - action: send_message
+      content: Please send me Customer segment 1 analysis for my report.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please send me Department 9 budget for my report.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_3:
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my quarterly revenue calculation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my quarterly revenue calculation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_4:
+    - action: send_message
+      content: Please share Customer segment 16 analysis and Customer segment 1 analysis
+        for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+  messages_sent: 5
+  round: 2
+  tasks_completed: 1
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my report preparation.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: Please share Customer segment 3 analysis for my report preparation.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_2:
+    - action: send_message
+      content: Please send me Department 9 budget for my report.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_information
+      information:
+      - Customer segment 7 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Customer segment 7 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_3:
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my quarterly revenue calculation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_4:
+    - action: submit_task
+      answer: 'Combined result of: Customer segment 16 analysis, Region 19 market
+        data, Customer segment 1 analysis'
+      private_thoughts: No private thoughts provided
+    agent_5:
+    - action: submit_task
+      answer: 'Combined result of: Customer segment 7 analysis, Department 20 budget'
+      private_thoughts: No private thoughts provided
+  messages_sent: 4
+  round: 3
+  tasks_completed: 2
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my report preparation.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_message
+      content: 'Reminder: Please share Customer segment 3 analysis for my report preparation.'
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_2:
+    - action: send_message
+      content: Please send me Department 9 budget for my report. This is my 4th request
+        as I still have not received it.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_3:
+    - action: submit_task
+      answer: 'Combined result of: Customer segment 7 analysis, Customer segment 1
+        analysis'
+      private_thoughts: No private thoughts provided
+    - action: send_information
+      information:
+      - Customer segment 3 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_4:
+    - action: send_message
+      content: Please share Product 17 performance metrics for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Region 15 market data for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_5:
+    - action: send_message
+      content: Please share Region 11 market data for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Region 15 market data
+      private_thoughts: No private thoughts provided
+      to: agent_4
+  messages_sent: 8
+  round: 4
+  tasks_completed: 1
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my report preparation.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_message
+      content: Please share Customer segment 3 analysis for my report preparation.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_2:
+    - action: send_message
+      content: Please send me Customer segment 1 analysis for my report. I still need
+        it to complete my task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: This is my 5th request for Department 9 budget. If you cannot provide
+        it, please let me know.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_3:
+    - action: send_message
+      content: Please share Region 12 market data for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: Please share Product 17 performance metrics for my budget validation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_4:
+    - action: send_message
+      content: Please share Product 17 performance metrics for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_5:
+    - action: send_message
+      content: Please share Region 11 market data for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+  messages_sent: 10
+  round: 5
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Customer segment 7 analysis for my report preparation.
+        I need it to complete my task.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_information
+      information:
+      - Product 17 performance metrics
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_2:
+    - action: send_message
+      content: Please send me Customer segment 1 analysis for my report. I still need
+        it to complete my task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: I have requested Department 9 budget multiple times but haven't received
+        it. If you cannot provide it, please let me know.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_3:
+    - action: send_message
+      content: 'Reminder: Please share Region 12 market data for my budget validation
+        task.'
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: 'Reminder: Please share Product 17 performance metrics for my budget
+        validation task.'
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_4:
+    - action: submit_task
+      answer: 'Combined result of: Product 17 performance metrics, Region 15 market
+        data'
+      private_thoughts: No private thoughts provided
+    agent_5:
+    - action: send_message
+      content: Please share Region 11 market data for my budget validation task. This
+        is my third request.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task
+        again.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task again.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Customer segment 7 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_1
+  messages_sent: 8
+  round: 6
+  tasks_completed: 1
+- agent_actions:
+    agent_1:
+    - action: submit_task
+      answer: 'Combined result of: Customer segment 7 analysis, Region 11 market data,
+        Product 17 performance metrics, Customer segment 3 analysis'
+      private_thoughts: No private thoughts provided
+    - action: send_information
+      information:
+      - Region 11 market data
+      - Customer segment 1 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_2:
+    - action: send_message
+      content: I have all components for my report except Department 9 budget which
+        you have. Since I have requested multiple times without success, please confirm
+        if you can provide it or not.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_message
+      content: I still need Customer segment 1 analysis for my report. Could you please
+        send it? This is my 5th request.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_3:
+    - action: send_message
+      content: 'Reminder: Please share Region 12 market data for my budget validation
+        task.'
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: 'Reminder: Please share Product 17 performance metrics for my budget
+        validation task.'
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_information
+      information:
+      - Department 13 budget
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_4:
+    - action: send_message
+      content: Please share Department 20 budget for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_5:
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task again.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+  messages_sent: 7
+  round: 7
+  tasks_completed: 1
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: Please share Department 2 budget for my trend analysis.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: Please share Department 13 budget for my trend analysis.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Customer segment 7 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    agent_2:
+    - action: send_message
+      content: Please confirm if you can send Department 9 budget. I have requested
+        many times but no response.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_3:
+    - action: send_message
+      content: I need Product 17 performance metrics for my budget validation task.
+        Can you share it?
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: I need Region 12 market data for my budget validation task. Can you
+        share it?
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_information
+      information:
+      - Department 13 budget
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    agent_4:
+    - action: send_message
+      content: Please share Customer segment 8 analysis for my task.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_5:
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task again.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+  messages_sent: 8
+  round: 8
+  tasks_completed: 0
+- agent_actions:
+    agent_1:
+    - action: send_message
+      content: I have Product 17 performance metrics and Region 12 market data you
+        requested.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Product 17 performance metrics
+      - Region 6 market data
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_message
+      content: Please share Department 2 budget for my trend analysis.
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_message
+      content: Please share Department 13 budget for my trend analysis.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_2:
+    - action: submit_task
+      answer: 'Combined result of: Product 17 performance metrics, Customer segment
+        1 analysis, Department 9 budget'
+      private_thoughts: No private thoughts provided
+    - action: send_information
+      information:
+      - Department 2 budget
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_information
+      information:
+      - Region 12 market data
+      - Product 17 performance metrics
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_3:
+    - action: send_message
+      content: Please share Region 12 market data for my budget validation task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: send_message
+      content: Please share Product 17 performance metrics for my budget validation
+        task.
+      private_thoughts: No private thoughts provided
+      to: agent_1
+    - action: submit_task
+      answer: 'Combined result of: Region 12 market data, Customer segment 8 analysis,
+        Product 17 performance metrics'
+      private_thoughts: No private thoughts provided
+    agent_4:
+    - action: send_message
+      content: Please share Department 20 budget for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_message
+      content: Please share Customer segment 8 analysis for my analysis task.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_5:
+    - action: send_message
+      content: Please share Customer segment 1 analysis for my budget validation task.
+        This is important and I have not received it yet.
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    - action: send_message
+      content: Please share Department 13 budget for my budget validation task. This
+        is my last request.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+  messages_sent: 9
+  round: 9
+  tasks_completed: 2
+- agent_actions:
+    agent_1:
+    - action: submit_task
+      answer: 'Combined result of: Department 2 budget, Department 13 budget, Region
+        6 market data'
+      private_thoughts: No private thoughts provided
+    agent_2:
+    - action: send_message
+      content: Could you please send me Region 5 market data? I need it to complete
+        my forecast.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_message
+      content: Could you please send me Customer segment 8 analysis? I need it to
+        complete my forecast.
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    agent_3:
+    - action: send_message
+      content: Please share Region 10 market data and Region 11 market data for my
+        forecast task.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    - action: send_information
+      information:
+      - Customer segment 8 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_information
+      information:
+      - Customer segment 8 analysis
+      private_thoughts: No private thoughts provided
+      to: agent_4
+    agent_4:
+    - action: send_message
+      content: Please share Department 20 budget for my analysis task. This is urgent.
+      private_thoughts: No private thoughts provided
+      to: agent_5
+    agent_5:
+    - action: submit_task
+      answer: 'Combined result of: Region 11 market data, Customer segment 1 analysis,
+        Region 15 market data, Department 13 budget'
+      private_thoughts: No private thoughts provided
+    - action: send_information
+      information:
+      - Region 5 market data
+      private_thoughts: No private thoughts provided
+      to: agent_2
+    - action: send_information
+      information:
+      - Region 10 market data
+      - Region 11 market data
+      private_thoughts: No private thoughts provided
+      to: agent_3
+    - action: send_information
+      information:
+      - Department 20 budget
+      private_thoughts: No private thoughts provided
+      to: agent_4
+  messages_sent: 4
+  round: 10
+  tasks_completed: 2
+start_time: '2025-07-14T16:03:44.348781'
+total_messages: 94
+total_rounds: 10
+total_tasks_completed: 10
