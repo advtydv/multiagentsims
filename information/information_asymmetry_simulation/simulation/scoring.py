@@ -15,16 +15,26 @@ class ScoringSystem:
         self.task_completions = defaultdict(list)
         self.round_completions = defaultdict(lambda: defaultdict(int))
         
-    def award_points(self, agent_id: str, action_type: str, round_num: int = None) -> int:
+    def award_points(self, agent_id: str, action_type: str, round_num: int = None, quality_avg: float = None) -> int:
         """Award points to an agent for an action"""
         points = 0
         
         if action_type == 'task_completion':
-            points = self.config['task_completion']
+            base_points = self.config['task_completion']
+            
+            # Apply quality multiplier if provided
+            if quality_avg is not None:
+                points = int(base_points * (quality_avg / 100))
+            else:
+                points = base_points
             
             # Check if agent is first to complete a task this round
             if round_num and self.round_completions[round_num]['total'] == 0:
-                points += self.config.get('bonus_for_first', 0)
+                bonus = self.config.get('bonus_for_first', 0)
+                # Apply quality multiplier to bonus as well
+                if quality_avg is not None:
+                    bonus = int(bonus * (quality_avg / 100))
+                points += bonus
                 
             if round_num:
                 self.round_completions[round_num]['total'] += 1
@@ -34,7 +44,8 @@ class ScoringSystem:
         self.task_completions[agent_id].append({
             'points': points,
             'action': action_type,
-            'round': round_num
+            'round': round_num,
+            'quality_avg': quality_avg
         })
         
         return points

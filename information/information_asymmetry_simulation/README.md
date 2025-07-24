@@ -63,6 +63,21 @@ This generates:
 - Score progression charts
 - Task completion analysis
 
+### Theory of Mind Analysis
+
+The simulation now includes Theory of Mind (ToM) assessment through strategic reports collected every 3 rounds. Analyze these reports:
+
+```bash
+python analyze_reports.py logs/simulation_TIMESTAMP/simulation_log.jsonl
+```
+
+This evaluates each agent's:
+- Understanding of other agents' goals and strategies
+- Ability to predict others' behavior
+- Awareness of what others believe
+- Depth of recursive thinking ("I think they think...")
+- Social awareness and group dynamics understanding
+
 ## Simulation Mechanics
 
 ### Information Distribution
@@ -83,6 +98,12 @@ Agents can:
 - Points awarded for task completion
 - Bonus points for being first in a round
 - Rankings updated each round
+
+### Strategic Reports
+- Every 3 rounds, agents submit detailed strategic analysis reports
+- Reports reveal agents' understanding of the environment and other agents
+- Used to assess Theory of Mind capabilities without agents knowing
+- Reports include agent profiling, interaction analysis, and predictions
 
 ## Output Structure
 

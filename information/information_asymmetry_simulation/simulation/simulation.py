@@ -6,6 +6,7 @@ import logging
 from typing import Dict, List, Any
 from datetime import datetime
 import json
+import statistics
 
 from .agent import Agent
 from .tasks import TaskManager, InformationManager
@@ -55,7 +56,8 @@ class SimulationManager:
                 initial_info=info_distribution[i],
                 communication_system=self.communication,
                 scoring_system=self.scoring,
-                all_info_pieces=self.info_manager.information_pieces  # Pass it during initialization
+                all_info_pieces=self.info_manager.information_pieces,  # Pass it during initialization
+                simulation_config=self.config['simulation']  # Pass simulation config for rankings visibility
             )
             agents[agent_id] = agent
             
@@ -104,13 +106,38 @@ class SimulationManager:
             'round': self.current_round,
             'agent_actions': {},
             'tasks_completed': 0,
-            'messages_sent': 0
+            'messages_sent': 0,
+            'reports_submitted': 0
         }
         
         # Build current state for all agents
         current_state = self._build_current_state()
         
-        # Each agent takes their turn
+        # Check if this is a report round (every 3 rounds)
+        is_report_round = (self.current_round % 3 == 0)
+        
+        # If it's a report round, collect reports first
+        if is_report_round:
+            self.logger.info(f"Round {self.current_round}: Requesting strategic reports from all agents")
+            collected_reports = {}
+            
+            for agent_id, agent in self.agents.items():
+                self.logger.debug(f"Requesting report from {agent_id}")
+                report_actions = agent.take_turn(current_state, self.current_round, request_report=True)
+                
+                if report_actions:
+                    for action in report_actions:
+                        if action['action'] == 'submit_report':
+                            self.sim_logger.log_agent_report(agent_id, self.current_round, action['report'])
+                            round_results['reports_submitted'] += 1
+                            collected_reports[agent_id] = action['report']
+                            self.logger.info(f"Received strategic report from {agent_id}")
+            
+            # Aggregate cooperation scores after all reports are collected
+            if collected_reports:
+                self._aggregate_cooperation_scores(collected_reports)
+        
+        # Each agent takes their turn (normal actions)
         for agent_id, agent in self.agents.items():
             self.logger.debug(f"Agent {agent_id} taking turn...")
             
@@ -131,6 +158,10 @@ class SimulationManager:
                 
                 # Process each action
                 for i, action in enumerate(actions):
+                    # Skip report actions as they're handled separately
+                    if action['action'] == 'submit_report':
+                        continue
+                        
                     # Log each action
                     self.sim_logger.log_agent_action(agent_id, self.current_round, action)
                     
@@ -210,8 +241,9 @@ class SimulationManager:
         
         # Check if sender actually has the information they're trying to send
         missing_info = []
+        sender_info_names = {piece.name for piece in sender.information}
         for info_piece in information:
-            if info_piece not in sender.information:
+            if info_piece not in sender_info_names:
                 missing_info.append(info_piece)
         
         if missing_info:
@@ -220,11 +252,17 @@ class SimulationManager:
         
         # Transfer the information
         transferred = []
-        for info_piece in information:
-            if info_piece not in receiver.information:
-                receiver.information.add(info_piece)
-                transferred.append(info_piece)
-                self.logger.info(f"Transferred '{info_piece}' from {from_agent} to {to_agent}")
+        receiver_info_names = {piece.name for piece in receiver.information}
+        
+        for info_name in information:
+            if info_name not in receiver_info_names:
+                # Find the actual InformationPiece object from sender
+                for piece in sender.information:
+                    if piece.name == info_name:
+                        receiver.information.add(piece)
+                        transferred.append(info_name)
+                        self.logger.info(f"Transferred '{info_name}' from {from_agent} to {to_agent}")
+                        break
         
         # Update the information directory to reflect the transfer
         if transferred:
@@ -260,8 +298,9 @@ class SimulationManager:
             self.info_manager.update_agent_information(agent_id, agent_info)
         
         missing_info = []
+        agent_info_names = {piece.name for piece in agent_info}
         for required_piece in current_task['required_info']:
-            if required_piece not in agent_info:
+            if required_piece not in agent_info_names:
                 missing_info.append(required_piece)
         
         if missing_info:
@@ -272,8 +311,12 @@ class SimulationManager:
         
         # Check if answer format is correct
         if self.task_manager.check_answer(current_task, answer):
-            # Award points
-            points = self.scoring.award_points(agent_id, 'task_completion', self.current_round)
+            # Calculate average quality of information used for this task
+            info_pieces_used = self.info_manager.get_information_by_names(agent_id, current_task['required_info'])
+            quality_avg = sum(piece.quality for piece in info_pieces_used) / len(info_pieces_used) if info_pieces_used else 100
+            
+            # Award points with quality multiplier
+            points = self.scoring.award_points(agent_id, 'task_completion', self.current_round, quality_avg)
             
             # Mark task as completed
             agent.complete_task(current_task['id'])
@@ -283,8 +326,9 @@ class SimulationManager:
                 new_task = self.task_manager.create_task(agent_id)
                 agent.assign_task(new_task)
             
-            self.sim_logger.log_task_completion(agent_id, current_task['id'], True)
-            return {'success': True, 'points_awarded': points}
+            self.sim_logger.log_task_completion(agent_id, current_task['id'], True, 
+                                              {'quality_avg': quality_avg, 'points_awarded': points})
+            return {'success': True, 'points_awarded': points, 'quality_avg': quality_avg}
         else:
             self.sim_logger.log_task_completion(agent_id, current_task['id'], False, 
                                               {'reason': 'incorrect_format'})
@@ -295,8 +339,83 @@ class SimulationManager:
         self.logger.info(f"Round {round_num} complete:")
         self.logger.info(f"  - Tasks completed: {round_results['tasks_completed']}")
         self.logger.info(f"  - Messages sent: {round_results['messages_sent']}")
+        if 'reports_submitted' in round_results and round_results['reports_submitted'] > 0:
+            self.logger.info(f"  - Strategic reports collected: {round_results['reports_submitted']}")
         
         rankings = self.scoring.get_rankings()
         self.logger.info("  - Current rankings:")
         for i, (agent_id, score) in enumerate(rankings.items(), 1):
             self.logger.info(f"    {i}. {agent_id}: {score} points")
+    
+    def _aggregate_cooperation_scores(self, collected_reports: Dict[str, Dict[str, Any]]):
+        """Aggregate cooperation scores from all agent reports"""
+        self.logger.info("Aggregating cooperation scores...")
+        
+        # Initialize score tracking
+        raw_scores = {}  # {rater_agent: {rated_agent: score}}
+        agent_scores = {}  # {agent: [list of scores received]}
+        
+        # Collect all scores
+        for rater_id, report in collected_reports.items():
+            if 'cooperation_scores' in report:
+                scores = report['cooperation_scores']
+                raw_scores[rater_id] = {}
+                
+                for rated_id, score in scores.items():
+                    if rated_id == 'self':
+                        # Handle self-assessment
+                        if rater_id not in agent_scores:
+                            agent_scores[rater_id] = []
+                        agent_scores[rater_id].append(('self', score))
+                    else:
+                        # Regular scoring
+                        raw_scores[rater_id][rated_id] = score
+                        if rated_id not in agent_scores:
+                            agent_scores[rated_id] = []
+                        agent_scores[rated_id].append((rater_id, score))
+        
+        # Calculate aggregated statistics
+        aggregated = {}
+        for agent_id, score_list in agent_scores.items():
+            # Separate self-assessment from peer assessments
+            peer_scores = [score for rater, score in score_list if rater != 'self']
+            self_score = next((score for rater, score in score_list if rater == 'self'), None)
+            
+            if peer_scores:
+                aggregated[agent_id] = {
+                    'mean': statistics.mean(peer_scores),
+                    'median': statistics.median(peer_scores),
+                    'std_dev': statistics.stdev(peer_scores) if len(peer_scores) > 1 else 0,
+                    'min': min(peer_scores),
+                    'max': max(peer_scores),
+                    'count': len(peer_scores),
+                    'self_assessment': self_score,
+                    'scores_received': peer_scores
+                }
+            else:
+                # No peer scores received
+                aggregated[agent_id] = {
+                    'mean': None,
+                    'median': None,
+                    'std_dev': None,
+                    'min': None,
+                    'max': None,
+                    'count': 0,
+                    'self_assessment': self_score,
+                    'scores_received': []
+                }
+        
+        # Log aggregated results
+        self.sim_logger.log_cooperation_scores_aggregated(
+            self.current_round,
+            raw_scores,
+            aggregated
+        )
+        
+        # Log summary
+        self.logger.info("Cooperation score summary:")
+        for agent_id, stats in sorted(aggregated.items()):
+            if stats['count'] > 0:
+                self.logger.info(f"  {agent_id}: mean={stats['mean']:.1f}, "
+                               f"median={stats['median']}, range={stats['min']}-{stats['max']}, "
+                               f"self={stats['self_assessment'] or 'N/A'}")

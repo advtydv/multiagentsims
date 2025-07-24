@@ -4,8 +4,40 @@ Task and Information management for Information Asymmetry Simulation
 
 import random
 import uuid
-from typing import Dict, List, Any, Set
+from typing import Dict, List, Any, Set, Tuple
 from collections import defaultdict
+from dataclasses import dataclass
+
+
+@dataclass
+class InformationPiece:
+    """Represents a piece of information with quality"""
+    name: str
+    quality: int  # 0-100 quality score
+    
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return self.name
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if isinstance(other, InformationPiece):
+            return self.name == other.name
+        elif isinstance(other, str):
+            return self.name == other
+        return False
+    
+    def lower(self):
+        """Allow calling lower() on InformationPiece"""
+        return self.name.lower()
+    
+    def upper(self):
+        """Allow calling upper() on InformationPiece"""
+        return self.name.upper()
 
 
 class InformationManager:
@@ -22,19 +54,33 @@ class InformationManager:
         # Track who has what information
         self.agent_information = defaultdict(set)
         
-    def _generate_information_pieces(self) -> List[str]:
-        """Generate all information pieces based on templates"""
+    def _generate_information_pieces(self) -> List[InformationPiece]:
+        """Generate all information pieces based on templates with quality"""
         pieces = []
         templates = self.config['info_templates']
         
         for i in range(self.total_pieces):
             template = random.choice(templates)
-            piece = template.format(n=i+1)
+            name = template.format(n=i+1)
+            
+            # Generate quality with realistic distribution
+            # 60% decent (60-79), 20% high (80-100), 15% low (20-59), 5% poor (0-19)
+            rand = random.random()
+            if rand < 0.05:  # 5% poor quality
+                quality = random.randint(0, 19)
+            elif rand < 0.20:  # 15% low quality
+                quality = random.randint(20, 59)
+            elif rand < 0.80:  # 60% decent quality
+                quality = random.randint(60, 79)
+            else:  # 20% high quality
+                quality = random.randint(80, 100)
+            
+            piece = InformationPiece(name=name, quality=quality)
             pieces.append(piece)
             
         return pieces
         
-    def distribute_information(self, num_agents: int) -> List[List[str]]:
+    def distribute_information(self, num_agents: int) -> List[List[InformationPiece]]:
         """Distribute information pieces among agents"""
         distribution = [[] for _ in range(num_agents)]
         
@@ -61,26 +107,46 @@ class InformationManager:
         return distribution
         
     def get_directory(self) -> Dict[str, List[str]]:
-        """Get the complete information directory"""
+        """Get the complete information directory (names only, no quality)"""
         return {
-            agent_id: sorted(list(info_set)) 
+            agent_id: sorted([piece.name for piece in info_set]) 
             for agent_id, info_set in self.agent_information.items()
         }
         
-    def get_agent_information(self, agent_id: str) -> Set[str]:
+    def get_agent_information(self, agent_id: str) -> Set[InformationPiece]:
         """Get information held by a specific agent"""
         return self.agent_information.get(agent_id, set())
     
-    def update_agent_information(self, agent_id: str, new_info: Set[str]):
+    def update_agent_information(self, agent_id: str, new_info: Set[InformationPiece]):
         """Update the information held by a specific agent"""
         self.agent_information[agent_id] = new_info
     
     def transfer_information(self, from_agent: str, to_agent: str, info_pieces: List[str]):
         """Update the directory when information is transferred between agents"""
-        # Add information to recipient
-        for piece in info_pieces:
-            self.agent_information[to_agent].add(piece)
+        # Find the actual InformationPiece objects with their quality
+        from_agent_info = self.agent_information[from_agent]
+        
+        for piece_name in info_pieces:
+            # Find the piece with matching name from sender's information
+            for info_piece in from_agent_info:
+                if info_piece.name == piece_name:
+                    # Transfer the piece with its quality preserved
+                    self.agent_information[to_agent].add(info_piece)
+                    break
         # Note: We don't remove from sender as they still have the information
+    
+    def get_information_by_names(self, agent_id: str, info_names: List[str]) -> List[InformationPiece]:
+        """Get InformationPiece objects by their names for a specific agent"""
+        agent_info = self.agent_information.get(agent_id, set())
+        result = []
+        
+        for piece_name in info_names:
+            for info_piece in agent_info:
+                if info_piece.name == piece_name:
+                    result.append(info_piece)
+                    break
+        
+        return result
 
 
 class TaskManager:
@@ -104,12 +170,15 @@ class TaskManager:
         
         # Select required information pieces
         all_pieces = self.info_manager.information_pieces
-        required_info = random.sample(all_pieces, num_pieces)
+        required_info_pieces = random.sample(all_pieces, num_pieces)
         
-        # Generate task description
+        # Generate task description using piece names only
         template = random.choice(self.config['task_templates'])
-        info_list = " and ".join(f'"{piece}"' for piece in required_info)
+        info_list = " and ".join(f'"{piece.name}"' for piece in required_info_pieces)
         description = template.format(info_pieces=info_list)
+        
+        # Store only the names for the task requirements
+        required_info = [piece.name for piece in required_info_pieces]
         
         # Calculate the expected answer (for this simple version, it's just concatenation)
         expected_answer = self._calculate_answer(required_info)

@@ -159,6 +159,35 @@ class SimulationLogger:
             'was_truthful': was_truthful
         })
         
+    def log_agent_report(self, agent_id: str, round_num: int, report: Dict[str, Any]):
+        """Log an agent's strategic report"""
+        event = {
+            'timestamp': datetime.now().isoformat(),
+            'event_type': 'agent_report',
+            'data': {
+                'round': round_num,
+                'agent_id': agent_id,
+                'report': report
+            }
+        }
+        self.log_file.write(json.dumps(event) + '\n')
+        self.log_file.flush()
+    
+    def log_cooperation_scores_aggregated(self, round_num: int, raw_scores: Dict[str, Dict[str, int]], 
+                                        aggregated: Dict[str, Dict[str, Any]]):
+        """Log aggregated cooperation scores from all agents"""
+        event = {
+            'timestamp': datetime.now().isoformat(),
+            'event_type': 'cooperation_scores_aggregated',
+            'data': {
+                'round': round_num,
+                'raw_scores': raw_scores,
+                'aggregated_scores': aggregated
+            }
+        }
+        self.log_file.write(json.dumps(event) + '\n')
+        self.log_file.flush()
+        
     def close(self):
         """Close all log files"""
         self.log_file.close()
