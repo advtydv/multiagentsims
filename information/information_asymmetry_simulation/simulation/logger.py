@@ -150,13 +150,12 @@ class SimulationLogger:
         })
         
     def log_information_exchange(self, from_agent: str, to_agent: str, 
-                                information: Any, was_truthful: bool):
+                                information: Any):
         """Log information exchange between agents"""
         self.log_event('information_exchange', {
             'from_agent': from_agent,
             'to_agent': to_agent,
-            'information': information,
-            'was_truthful': was_truthful
+            'information': information
         })
         
     def log_agent_report(self, agent_id: str, round_num: int, report: Dict[str, Any]):

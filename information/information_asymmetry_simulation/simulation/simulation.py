@@ -149,12 +149,12 @@ class SimulationManager:
                 
                 # Extract overall private thoughts if available
                 overall_thoughts = None
-                if actions and isinstance(actions[0], dict) and 'private_thoughts' in actions[0]:
-                    overall_thoughts = actions[0].get('private_thoughts')
+                if actions and isinstance(actions[0], dict) and '_private_thoughts' in actions[0]:
+                    overall_thoughts = actions[0].get('_private_thoughts')
                 
                 # Log the overall private thoughts once for this turn
                 if overall_thoughts:
-                    self.sim_logger.log_private_thoughts(agent_id, self.current_round, overall_thoughts, "multiple_actions")
+                    self.sim_logger.log_private_thoughts(agent_id, self.current_round, overall_thoughts, "turn_summary")
                 
                 # Process each action
                 for i, action in enumerate(actions):
@@ -269,7 +269,7 @@ class SimulationManager:
             self.info_manager.transfer_information(from_agent, to_agent, transferred)
         
         # Log the transfer
-        self.sim_logger.log_information_exchange(from_agent, to_agent, information, True)
+        self.sim_logger.log_information_exchange(from_agent, to_agent, information)
         
         # Send a notification message
         if transferred:
