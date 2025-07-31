@@ -51,7 +51,29 @@ Key parameters:
 
 ## Analyzing Results
 
-After running a simulation, analyze the results:
+### Interactive Dashboard
+
+The simulation includes an interactive web dashboard for visualizing results:
+
+```bash
+# Quick launch with most recent simulation
+python dashboard/launch_dashboard.py
+
+# Or specify a particular simulation log
+python dashboard/launch_dashboard.py logs/simulation_TIMESTAMP/simulation_log.jsonl
+```
+
+The dashboard provides:
+- **Timeline View**: Filter and explore all simulation events
+- **Agent Network**: Visualize communication patterns and relationships
+- **Metrics Charts**: Compare agent performance across dimensions
+- **Analysis Tools**: Activity trends and performance rankings
+
+Access the dashboard at http://localhost:8080 after launching.
+
+### Command-line Analysis
+
+For batch processing and report generation:
 
 ```bash
 python analysis/analyzer.py logs/simulation_TIMESTAMP/

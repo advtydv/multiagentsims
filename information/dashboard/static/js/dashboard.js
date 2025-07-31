@@ -1,4 +1,6 @@
 // Global variables
+const DASHBOARD_VERSION = "2.1"; // Update this when making changes
+console.log(`Dashboard loaded - VERSION ${DASHBOARD_VERSION}`);
 let currentSimulation = null;
 let simulationData = null;
 let currentRound = 1;
@@ -14,19 +16,72 @@ function reinitializeTooltips() {
     });
 }
 
-// Agent colors
-const agentColors = {
-    'agent_1': '#FF6B6B',
-    'agent_2': '#4ECDC4',
-    'agent_3': '#45B7D1',
-    'agent_4': '#F7B731',
-    'agent_5': '#5F27CD',
-    'agent_6': '#00D2D3',
-    'agent_7': '#FF9FF3',
-    'agent_8': '#54A0FF',
-    'agent_9': '#48DBFB',
-    'agent_10': '#FD79A8'
-};
+// Agent colors - will be dynamically generated
+let agentColors = {};
+let agentIndices = {}; // Map agent names to indices for consistent styling
+
+// Function to generate colors for any number of agents
+function generateAgentColors(agents) {
+    const baseColors = [
+        '#FF6B6B', '#4ECDC4', '#45B7D1', '#F7B731', '#5F27CD',
+        '#00D2D3', '#FF9FF3', '#54A0FF', '#48DBFB', '#FD79A8'
+    ];
+    
+    agentColors = {};
+    agentIndices = {};
+    const agentList = Array.isArray(agents) ? agents : Object.keys(agents);
+    
+    // Sort agents to ensure consistent ordering
+    agentList.sort().forEach((agent, index) => {
+        agentIndices[agent] = index + 1; // 1-based index
+        if (index < baseColors.length) {
+            agentColors[agent] = baseColors[index];
+        } else {
+            // Generate additional colors using HSL
+            const hue = (index * 360 / agentList.length) % 360;
+            agentColors[agent] = `hsl(${hue}, 70%, 60%)`;
+        }
+    });
+    
+    // Generate CSS for agents beyond 10
+    generateAgentCSS(agentList.length);
+    
+    return agentColors;
+}
+
+// Function to dynamically generate CSS for additional agents
+function generateAgentCSS(agentCount) {
+    if (agentCount <= 10) return; // CSS already exists for agents 1-10
+    
+    // Create or get style element
+    let styleEl = document.getElementById('dynamic-agent-styles');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-agent-styles';
+        document.head.appendChild(styleEl);
+    }
+    
+    let css = '';
+    for (let i = 11; i <= agentCount; i++) {
+        const hue = ((i - 1) * 360 / agentCount) % 360;
+        const color = `hsl(${hue}, 70%, 60%)`;
+        const bgColor = `hsl(${hue}, 70%, 95%)`;
+        css += `.agent-${i} { color: ${color}; background-color: ${bgColor}; }\n`;
+    }
+    
+    styleEl.textContent = css;
+}
+
+// Function to get agent number/identifier for styling
+function getAgentNum(agentId) {
+    // If agent follows pattern agent_X, extract X
+    const match = agentId.match(/agent_(\d+)/);
+    if (match) {
+        return match[1];
+    }
+    // Otherwise use the index from our mapping
+    return agentIndices[agentId] || '1';
+}
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
@@ -79,6 +134,9 @@ async function loadSimulation(simId) {
         currentSimulation = simId;
         currentRound = 1;
         maxRounds = simulationData.config.simulation.rounds;
+        
+        // Generate colors for agents
+        generateAgentColors(simulationData.agents);
         
         // Update UI
         updateSimulationInfo();
@@ -143,17 +201,25 @@ function updateSimulationInfo() {
 
 // Setup filters
 function setupFilters() {
+    // Clear current filter sets
+    eventFilters.clear();
+    agentFilters.clear();
+    
     // Event type filters
     const eventTypes = Object.keys(simulationData.statistics.event_types);
     const eventFiltersDiv = document.getElementById('eventTypeFilters');
     eventFiltersDiv.innerHTML = '';
     
     eventTypes.forEach(type => {
+        // Add to active filters by default
+        eventFilters.add(type);
+        
         const div = document.createElement('div');
         div.className = 'filter-checkbox';
+        const safeId = `filter-event-${type.replace(/_/g, '-')}`;
         div.innerHTML = `
-            <input type="checkbox" id="filter_${type}" value="${type}" checked>
-            <label for="filter_${type}">${formatEventType(type)} (${simulationData.statistics.event_types[type]})</label>
+            <input type="checkbox" id="${safeId}" value="${type}" checked onchange="updateEventFilter('${type}', this.checked)">
+            <label for="${safeId}">${formatEventType(type)} (${simulationData.statistics.event_types[type]})</label>
         `;
         eventFiltersDiv.appendChild(div);
     });
@@ -164,16 +230,39 @@ function setupFilters() {
     agentFiltersDiv.innerHTML = '';
     
     agents.forEach(agent => {
+        // Add to active filters by default
+        agentFilters.add(agent);
+        
         const div = document.createElement('div');
         div.className = 'filter-checkbox';
+        const safeId = `filter-agent-${agent.replace(/_/g, '-')}`;
         div.innerHTML = `
-            <input type="checkbox" id="filter_${agent}" value="${agent}" checked>
-            <label for="filter_${agent}">
-                <span class="agent-badge agent-${agent.split('_')[1]}">${agent}</span>
+            <input type="checkbox" id="${safeId}" value="${agent}" checked onchange="updateAgentFilter('${agent}', this.checked)">
+            <label for="${safeId}">
+                <span class="agent-badge agent-${getAgentNum(agent)}">${agent}</span>
             </label>
         `;
         agentFiltersDiv.appendChild(div);
     });
+}
+
+// Update filter functions
+function updateEventFilter(eventType, isChecked) {
+    if (isChecked) {
+        eventFilters.add(eventType);
+    } else {
+        eventFilters.delete(eventType);
+    }
+    loadRoundData(currentRound);
+}
+
+function updateAgentFilter(agentId, isChecked) {
+    if (isChecked) {
+        agentFilters.add(agentId);
+    } else {
+        agentFilters.delete(agentId);
+    }
+    loadRoundData(currentRound);
 }
 
 // Update agent legend
@@ -182,7 +271,7 @@ function updateAgentLegend() {
     legendDiv.innerHTML = '';
     
     Object.keys(simulationData.agents).forEach(agent => {
-        const agentNum = agent.split('_')[1];
+        const agentNum = getAgentNum(agent);
         const div = document.createElement('div');
         div.className = 'mb-2';
         div.innerHTML = `
@@ -283,8 +372,8 @@ function createEventCard(event) {
             break;
             
         case 'information_exchange':
-            const fromAgentNum = event.data.from_agent.split('_')[1];
-            const toAgentNum = event.data.to_agent.split('_')[1];
+            const fromAgentNum = event.data.from_getAgentNum(agent);
+            const toAgentNum = event.data.to_getAgentNum(agent);
             content = `
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
@@ -356,16 +445,22 @@ function createEventCard(event) {
 // Check if event should be displayed based on filters
 function shouldDisplayEvent(event) {
     // Check event type filter
-    const eventCheckbox = document.getElementById(`filter_${event.event_type}`);
-    if (eventCheckbox && !eventCheckbox.checked) {
+    if (!eventFilters.has(event.event_type)) {
         return false;
     }
     
     // Check agent filter
     const agentId = event.data.agent_id || event.data.from_agent || event.data.from;
     if (agentId && agentId !== 'system') {
-        const agentCheckbox = document.getElementById(`filter_${agentId}`);
-        if (agentCheckbox && !agentCheckbox.checked) {
+        if (!agentFilters.has(agentId)) {
+            return false;
+        }
+    }
+    
+    // For messages, also check the recipient
+    const toAgent = event.data.to_agent || event.data.to;
+    if (toAgent && toAgent !== 'system') {
+        if (!agentFilters.has(toAgent)) {
             return false;
         }
     }
@@ -401,10 +496,7 @@ function updateRoundNavigation() {
     document.querySelector('button[onclick="nextRound()"]').disabled = currentRound === maxRounds;
 }
 
-// Apply filters
-function applyFilters() {
-    loadRoundData(currentRound);
-}
+// Apply filters - now handled automatically on checkbox change
 
 // Initialize charts
 function initializeCharts() {
@@ -455,7 +547,7 @@ function prepareScoreData() {
     const rounds = Array.from({length: maxRounds}, (_, i) => i + 1);
     
     const datasets = agents.map((agent, index) => {
-        const agentNum = agent.split('_')[1];
+        const agentNum = getAgentNum(agent);
         const scoreData = simulationData.scores_over_time[agent];
         
         return {
@@ -504,44 +596,72 @@ function showLoading(show) {
 
 // Display quantitative analysis
 function displayQuantitativeAnalysis() {
-    const perfMetrics = simulationData.performance_metrics;
-    const commMetrics = simulationData.communication_metrics;
-    
-    if (!perfMetrics || !commMetrics) {
-        console.error('Metrics data not available');
-        return;
+    try {
+        const perfMetrics = simulationData.performance_metrics || {};
+        const commMetrics = simulationData.communication_metrics || {};
+        
+        if (!perfMetrics.overall && !commMetrics.summary) {
+            console.error('Metrics data not available');
+            const container = document.getElementById('quantitative');
+            if (container) {
+                container.innerHTML = '<div class="alert alert-warning">No quantitative metrics available for this simulation.</div>';
+            }
+            return;
+        }
+        
+        // Display overall metrics
+        if (document.getElementById('totalTasks')) {
+            document.getElementById('totalTasks').textContent = perfMetrics.overall.total_tasks_completed;
+        }
+        if (document.getElementById('totalPoints')) {
+            document.getElementById('totalPoints').textContent = perfMetrics.overall.total_points_awarded;
+        }
+        if (document.getElementById('avgPointsPerTask')) {
+            document.getElementById('avgPointsPerTask').textContent = perfMetrics.overall.average_points_per_task.toFixed(1);
+        }
+        if (document.getElementById('firstCompletionRate')) {
+            document.getElementById('firstCompletionRate').textContent = (perfMetrics.overall.first_completion_rate * 100).toFixed(1) + '%';
+        }
+        
+        // Display agent performance table
+        displayAgentPerformanceTable(perfMetrics.by_agent);
+        
+        // Display communication charts
+        displayCommunicationCharts(commMetrics);
+        
+        // Display cooperation matrix (skip if no canvas element)
+        if (document.getElementById('cooperationMatrix') && commMetrics.info_flow_matrix) {
+            displayCooperationMatrix(commMetrics.info_flow_matrix);
+        }
+        
+        // Display message content analysis
+        displayMessageAnalysis();
+        
+        // Display communication effectiveness
+        displayCommunicationEffectiveness();
+    } catch (error) {
+        console.error('Error in displayQuantitativeAnalysis:', error);
     }
-    
-    // Display overall metrics
-    document.getElementById('totalTasks').textContent = perfMetrics.overall.total_tasks_completed;
-    document.getElementById('totalPoints').textContent = perfMetrics.overall.total_points_awarded;
-    document.getElementById('avgPointsPerTask').textContent = perfMetrics.overall.average_points_per_task.toFixed(1);
-    document.getElementById('firstCompletionRate').textContent = (perfMetrics.overall.first_completion_rate * 100).toFixed(1) + '%';
-    
-    // Display agent performance table
-    displayAgentPerformanceTable(perfMetrics.by_agent);
-    
-    // Display communication charts
-    displayCommunicationCharts(commMetrics);
-    
-    // Display cooperation matrix
-    displayCooperationMatrix(commMetrics.info_flow_matrix);
-    
-    // Display message content analysis
-    displayMessageAnalysis();
 }
 
 // Display agent performance table
 function displayAgentPerformanceTable(agentMetrics) {
     const tbody = document.getElementById('agentPerformanceBody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
+    
+    if (!agentMetrics || Object.keys(agentMetrics).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No performance data available</td></tr>';
+        return;
+    }
     
     // Sort agents by total points
     const sortedAgents = Object.entries(agentMetrics)
         .sort((a, b) => b[1].total_points - a[1].total_points);
     
     sortedAgents.forEach(([agentId, metrics]) => {
-        const agentNum = agentId.split('_')[1];
+        const agentNum = getAgentNum(agentId);
         const row = document.createElement('tr');
         row.innerHTML = `
             <td><span class="agent-badge agent-${agentNum}">${agentId}</span></td>
@@ -632,6 +752,10 @@ function prepareCommFlowData(commMatrix) {
 // Display cooperation matrix
 function displayCooperationMatrix(infoFlowMatrix) {
     const canvas = document.getElementById('cooperationMatrix');
+    if (!canvas) {
+        console.error('Cooperation matrix canvas not found');
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const agents = Object.keys(simulationData.agents);
     
@@ -650,7 +774,7 @@ function displayCooperationMatrix(infoFlowMatrix) {
     ctx.fillStyle = '#333';
     
     agents.forEach((agent, i) => {
-        const agentNum = agent.split('_')[1];
+        const agentNum = getAgentNum(agent);
         
         // Row labels
         ctx.fillText(agent, 10, padding + i * cellSize + cellSize/2);
@@ -695,12 +819,14 @@ function displayCooperationMatrix(infoFlowMatrix) {
 // Display task progress
 function displayTaskProgress() {
     const taskContainer = document.getElementById('taskProgressContent');
-    const tasks = simulationData.tasks;
     
-    if (!tasks || Object.keys(tasks).length === 0) {
-        taskContainer.innerHTML = '<p class="text-muted">No tasks completed yet.</p>';
-        return;
-    }
+    try {
+        const tasks = simulationData.tasks;
+        
+        if (!tasks || Object.keys(tasks).length === 0) {
+            taskContainer.innerHTML = '<p class="text-muted">No tasks completed yet.</p>';
+            return;
+        }
     
     // Group tasks by agent
     const tasksByAgent = {};
@@ -715,7 +841,7 @@ function displayTaskProgress() {
     let html = '<div class="row">';
     
     Object.entries(tasksByAgent).forEach(([agentId, agentTasks]) => {
-        const agentNum = agentId.split('_')[1];
+        const agentNum = getAgentNum(agentId);
         
         html += `
             <div class="col-md-6 mb-4">
@@ -774,45 +900,99 @@ function displayTaskProgress() {
     ` + html;
     
     taskContainer.innerHTML = html;
+    } catch (error) {
+        console.error('Error in displayTaskProgress:', error);
+        taskContainer.innerHTML = '<p class="text-danger">Error loading task progress.</p>';
+    }
 }
 
 // Display strategic analysis
 function displayStrategicAnalysis() {
     const analysisContainer = document.getElementById('analysisContent');
+    console.log('displayStrategicAnalysis called - VERSION 2 with tables');
     
-    // Use the enhanced strategic analysis from backend if available
-    if (simulationData.strategic_analysis) {
-        displayEnhancedStrategicAnalysis(simulationData.strategic_analysis);
-        return;
-    }
-    
-    // Fallback to client-side analysis
-    if (!simulationData.private_thoughts || simulationData.private_thoughts.length === 0) {
-        analysisContainer.innerHTML = '<p class="text-muted">No strategic analysis data available.</p>';
-        return;
-    }
-    
-    let html = '<div class="container-fluid">';
-    
-    // Strategic Keywords Analysis
+    try {
+        // Skip the enhanced strategic analysis to use our new table format
+        // The enhanced version uses colored progress bars which we want to avoid
+        // if (simulationData.strategic_analysis) {
+        //     displayEnhancedStrategicAnalysis(simulationData.strategic_analysis);
+        //     return;
+        // }
+        
+        // Fallback to client-side analysis
+        if (!simulationData.private_thoughts || simulationData.private_thoughts.length === 0) {
+            analysisContainer.innerHTML = '<p class="text-muted">No strategic analysis data available.</p>';
+            return;
+        }
+        
+        let html = '<div class="container-fluid">';
+        
+        // Strategic Keywords Analysis
+        html += `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h4>Strategic Behavior Analysis</h4>
+                    <p class="text-muted">Analysis of agent strategies based on their private thoughts</p>
+                </div>
+            </div>
+        `;
+        
+        // Analyze private thoughts for strategic patterns
+        const thoughtAnalysis = analyzePrivateThoughts(simulationData.private_thoughts);
+        
+        // Display keyword detection methodology first
     html += `
         <div class="row mb-4">
             <div class="col-12">
-                <h4>Strategic Behavior Analysis</h4>
-                <p class="text-muted">Analysis of agent strategies based on their private thoughts</p>
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Pattern Detection Methodology</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">Strategic behaviors are detected through keyword pattern matching in private thoughts:</p>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <h6><i class="bi bi-handshake text-success"></i> Cooperation Keywords</h6>
+                                <ul class="small">
+                                    <li>Strong: "help everyone", "share freely", "mutual benefit"</li>
+                                    <li>Moderate: "willing to share", "cooperate", "goodwill"</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="bi bi-trophy text-warning"></i> Competition Keywords</h6>
+                                <ul class="small">
+                                    <li>Strong: "need to win", "get ahead", "beat others"</li>
+                                    <li>Moderate: "competitive", "maximize points", "strategic"</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-4">
+                                <h6><i class="bi bi-shield-lock text-danger"></i> Hoarding Keywords</h6>
+                                <ul class="small">
+                                    <li>Strong: "won't share", "keep secret", "withhold"</li>
+                                    <li>Moderate: "careful", "selective", "valuable info"</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     `;
     
-    // Analyze private thoughts for strategic patterns
-    const thoughtAnalysis = analyzePrivateThoughts(simulationData.private_thoughts);
-    
-    // Display agent strategy cards
+    // Display agent strategy cards with clear numbers
     html += '<div class="row">';
     
     Object.entries(thoughtAnalysis.byAgent).forEach(([agentId, analysis]) => {
-        const agentNum = agentId.split('_')[1];
+        const agentNum = getAgentNum(agentId);
         const dominantStrategy = getDominantStrategy(analysis);
+        
+        // Calculate percentage scores
+        const totalThoughts = analysis.thoughtCount || 1;
+        const cooperationPct = ((analysis.cooperation / totalThoughts) * 100).toFixed(1);
+        const competitionPct = ((analysis.competition / totalThoughts) * 100).toFixed(1);
+        const hoardingPct = ((analysis.hoarding / totalThoughts) * 100).toFixed(1);
+        const reciprocityPct = ((analysis.reciprocity / totalThoughts) * 100).toFixed(1);
+        const deceptionPct = ((analysis.deception / totalThoughts) * 100).toFixed(1);
         
         html += `
             <div class="col-md-6 mb-4">
@@ -821,25 +1001,61 @@ function displayStrategicAnalysis() {
                         <h5><span class="agent-badge agent-${agentNum}">${agentId}</span> Strategic Profile</h5>
                     </div>
                     <div class="card-body">
-                        <h6>Dominant Strategy: <span class="badge bg-${dominantStrategy.color}">${dominantStrategy.name}</span></h6>
+                        <h6>Pattern Detection Results</h6>
+                        <p class="text-muted small">Based on ${totalThoughts} private thoughts analyzed</p>
+                        
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Behavior</th>
+                                    <th>Detected</th>
+                                    <th>Frequency</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="bi bi-handshake text-success"></i> Cooperation</td>
+                                    <td>${analysis.cooperation}</td>
+                                    <td>${cooperationPct}%</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-trophy text-warning"></i> Competition</td>
+                                    <td>${analysis.competition}</td>
+                                    <td>${competitionPct}%</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-shield-lock text-danger"></i> Hoarding</td>
+                                    <td>${analysis.hoarding}</td>
+                                    <td>${hoardingPct}%</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-arrow-left-right text-info"></i> Reciprocity</td>
+                                    <td>${analysis.reciprocity}</td>
+                                    <td>${reciprocityPct}%</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-exclamation-triangle text-danger"></i> Deception</td>
+                                    <td>${analysis.deception}</td>
+                                    <td>${deceptionPct}%</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
                         <div class="mt-3">
-                            <h6>Behavioral Indicators:</h6>
-                            <ul class="list-unstyled">
-                                <li><i class="bi bi-handshake"></i> Cooperation: ${analysis.cooperation}</li>
-                                <li><i class="bi bi-trophy"></i> Competition: ${analysis.competition}</li>
-                                <li><i class="bi bi-shield-lock"></i> Information Hoarding: ${analysis.hoarding}</li>
-                                <li><i class="bi bi-arrow-left-right"></i> Reciprocity: ${analysis.reciprocity}</li>
-                                <li><i class="bi bi-exclamation-triangle"></i> Deception: ${analysis.deception}</li>
+                            <h6>Dominant Strategy: <span class="badge bg-${dominantStrategy.color}">${dominantStrategy.name}</span></h6>
+                            <p class="small text-muted">Based on highest frequency pattern: ${dominantStrategy.name} (${dominantStrategy.score} occurrences)</p>
+                        </div>
+                        
+                        ${analysis.keyPhrases.length > 0 ? `
+                        <div class="mt-3">
+                            <h6>Sample Detected Phrases:</h6>
+                            <ul class="small">
+                                ${analysis.keyPhrases.slice(0, 3).map(phrase => 
+                                    `<li>"${phrase}"</li>`
+                                ).join('')}
                             </ul>
                         </div>
-                        <div class="mt-3">
-                            <h6>Key Phrases:</h6>
-                            <div class="text-muted small">
-                                ${analysis.keyPhrases.slice(0, 3).map(phrase => 
-                                    `<span class="badge bg-light text-dark me-1">${phrase}</span>`
-                                ).join('')}
-                            </div>
-                        </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -852,32 +1068,48 @@ function displayStrategicAnalysis() {
     html += `
         <div class="row mt-4">
             <div class="col-12">
-                <h4>Simulation-Wide Patterns</h4>
+                <h4>Simulation-Wide Pattern Summary</h4>
+                <p class="text-muted">Aggregate analysis across all agents</p>
             </div>
-            <div class="col-md-4">
-                <div class="card text-center">
+            <div class="col-12">
+                <div class="card">
                     <div class="card-body">
-                        <h5>Cooperation Level</h5>
-                        <h2 class="text-success">${thoughtAnalysis.overall.cooperationScore.toFixed(1)}%</h2>
-                        <small class="text-muted">Based on cooperative language</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>Competition Level</h5>
-                        <h2 class="text-warning">${thoughtAnalysis.overall.competitionScore.toFixed(1)}%</h2>
-                        <small class="text-muted">Based on competitive language</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <h5>Deception Attempts</h5>
-                        <h2 class="text-danger">${thoughtAnalysis.overall.deceptionCount}</h2>
-                        <small class="text-muted">Mentions of misleading/withholding</small>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                    <th>Calculation Method</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="bi bi-handshake text-success"></i> Overall Cooperation Level</td>
+                                    <td><strong>${thoughtAnalysis.overall.cooperationScore.toFixed(1)}%</strong></td>
+                                    <td class="text-muted small">Percentage of thoughts containing cooperation keywords</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-trophy text-warning"></i> Overall Competition Level</td>
+                                    <td><strong>${thoughtAnalysis.overall.competitionScore.toFixed(1)}%</strong></td>
+                                    <td class="text-muted small">Percentage of thoughts containing competition keywords</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-exclamation-triangle text-danger"></i> Total Deception Indicators</td>
+                                    <td><strong>${thoughtAnalysis.overall.deceptionCount}</strong></td>
+                                    <td class="text-muted small">Count of thoughts suggesting deceptive intent</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="bi bi-file-text"></i> Total Thoughts Analyzed</td>
+                                    <td><strong>${simulationData.private_thoughts.length}</strong></td>
+                                    <td class="text-muted small">Total private thoughts across all agents</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="alert alert-info mt-3">
+                            <h6><i class="bi bi-info-circle"></i> Analysis Note</h6>
+                            <p class="small mb-0">These metrics are based on keyword pattern detection in private thoughts. They indicate strategic intentions rather than actual behaviors. For actual behavior analysis, refer to the Quantitative Analysis tab.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -886,9 +1118,13 @@ function displayStrategicAnalysis() {
     
     html += '</div>';
     analysisContainer.innerHTML = html;
+    } catch (error) {
+        console.error('Error displaying strategic analysis:', error);
+        analysisContainer.innerHTML = '<p class="text-danger">Error loading strategic analysis.</p>';
+    }
 }
 
-// Analyze private thoughts for strategic patterns
+// Analyze agent strategies using behavioral analysis
 function analyzePrivateThoughts(thoughts) {
     const analysis = {
         byAgent: {},
@@ -899,19 +1135,17 @@ function analyzePrivateThoughts(thoughts) {
         }
     };
     
-    // Keywords for different strategies
-    const keywords = {
-        cooperation: ['cooperat', 'help', 'share', 'assist', 'support', 'goodwill', 'trust', 'reciproc'],
-        competition: ['compet', 'win', 'beat', 'rank', 'lead', 'advantage', 'strategic', 'edge'],
-        hoarding: ['hoard', 'keep', 'withhold', 'protect', 'careful', 'selective', 'cautious'],
-        reciprocity: ['reciproc', 'exchange', 'trade', 'return', 'quid pro quo', 'mutual'],
-        deception: ['decei', 'lie', 'mislead', 'false', 'trick', 'manipulat', 'pretend']
-    };
+    if (!thoughts || thoughts.length === 0) {
+        return analysis;
+    }
     
-    // Initialize agent analysis
+    // Get actual behavioral data
+    const messages = simulationData.messages || [];
+    const infoFlows = simulationData.information_flows || [];
     const agents = new Set();
     thoughts.forEach(thought => agents.add(thought.agent_id));
     
+    // Initialize agent analysis with behavioral tracking
     agents.forEach(agentId => {
         analysis.byAgent[agentId] = {
             cooperation: 0,
@@ -920,57 +1154,206 @@ function analyzePrivateThoughts(thoughts) {
             reciprocity: 0,
             deception: 0,
             keyPhrases: [],
-            thoughtCount: 0
+            thoughtCount: 0,
+            // New behavioral metrics
+            actualBehaviors: {
+                requestsMade: 0,
+                requestsAnswered: 0,
+                requestsIgnored: 0,
+                proactiveSharing: 0,
+                withheldInfo: 0,
+                consistencyScore: 0
+            }
         };
     });
     
-    // Analyze each thought
+    // Build request-response map
+    const requestMap = {};
+    messages.forEach(msg => {
+        if (msg.from !== 'system' && msg.to !== 'system') {
+            const content = (msg.content || '').toLowerCase();
+            if (content.includes('need') || content.includes('require') || content.includes('please')) {
+                const key = `${msg.from}-${msg.to}`;
+                if (!requestMap[key]) requestMap[key] = [];
+                requestMap[key].push({
+                    timestamp: new Date(msg.timestamp),
+                    content: msg.content
+                });
+            }
+        }
+    });
+    
+    // Track actual information sharing behavior
+    const sharingBehavior = {};
+    infoFlows.forEach(flow => {
+        const from = flow.from_agent || flow.from;
+        const to = flow.to_agent || flow.to;
+        if (!sharingBehavior[from]) sharingBehavior[from] = { shared: 0, proactive: 0 };
+        
+        sharingBehavior[from].shared += flow.information.length;
+        
+        // Check if this was proactive (no recent request)
+        const reqKey = `${to}-${from}`;
+        if (requestMap[reqKey]) {
+            const flowTime = new Date(flow.timestamp);
+            const recentRequest = requestMap[reqKey].find(req => 
+                (flowTime - req.timestamp) < 60000 && req.timestamp < flowTime
+            );
+            if (!recentRequest) {
+                sharingBehavior[from].proactive += flow.information.length;
+            }
+        } else {
+            sharingBehavior[from].proactive += flow.information.length;
+        }
+    });
+    
+    // Analyze thoughts with context
     thoughts.forEach(thought => {
         const agentId = thought.agent_id;
         const text = thought.thoughts.toLowerCase();
+        const agentAnalysis = analysis.byAgent[agentId];
         
-        analysis.byAgent[agentId].thoughtCount++;
+        agentAnalysis.thoughtCount++;
         
-        // Count keyword occurrences
-        Object.entries(keywords).forEach(([strategy, words]) => {
-            words.forEach(word => {
-                if (text.includes(word)) {
-                    analysis.byAgent[agentId][strategy]++;
+        // Context-aware pattern matching
+        const patterns = {
+            cooperation: {
+                strong: [
+                    /help.*everyone/i,
+                    /share.*freely/i,
+                    /mutual.*benefit/i,
+                    /build.*trust/i,
+                    /work.*together/i
+                ],
+                moderate: [
+                    /willing.*share/i,
+                    /help.*others/i,
+                    /cooperat/i,
+                    /goodwill/i
+                ]
+            },
+            competition: {
+                strong: [
+                    /beat.*everyone/i,
+                    /must.*win/i,
+                    /get.*ahead/i,
+                    /outperform/i
+                ],
+                moderate: [
+                    /improve.*rank/i,
+                    /competitive/i,
+                    /strategic.*advantage/i
+                ]
+            },
+            hoarding: {
+                strong: [
+                    /never.*share/i,
+                    /keep.*everything/i,
+                    /withhold.*all/i
+                ],
+                moderate: [
+                    /selective.*sharing/i,
+                    /careful.*what.*share/i,
+                    /strategic.*withhold/i
+                ]
+            },
+            deception: {
+                strong: [
+                    /lie.*about/i,
+                    /pretend.*not.*have/i,
+                    /mislead.*others/i,
+                    /false.*information/i
+                ],
+                moderate: [
+                    /might.*mislead/i,
+                    /consider.*lying/i,
+                    /withhold.*truth/i
+                ]
+            }
+        };
+        
+        // Apply pattern matching with weights
+        Object.entries(patterns).forEach(([strategy, patternSet]) => {
+            patternSet.strong.forEach(pattern => {
+                if (pattern.test(text)) {
+                    agentAnalysis[strategy] += 3;
+                }
+            });
+            patternSet.moderate.forEach(pattern => {
+                if (pattern.test(text)) {
+                    agentAnalysis[strategy] += 1;
                 }
             });
         });
         
-        // Extract key phrases (simple approach - sentences with strategic keywords)
+        // Track reciprocity mentions
+        if (/quid.*pro.*quo|tit.*for.*tat|only.*if.*they/i.test(text)) {
+            agentAnalysis.reciprocity += 2;
+        }
+        
+        // Extract meaningful phrases (not just keyword-based)
         const sentences = thought.thoughts.split(/[.!?]+/);
         sentences.forEach(sentence => {
-            if (sentence.length > 20 && sentence.length < 100) {
-                for (const [strategy, words] of Object.entries(keywords)) {
-                    if (words.some(word => sentence.toLowerCase().includes(word))) {
-                        analysis.byAgent[agentId].keyPhrases.push(sentence.trim());
-                        break;
-                    }
+            sentence = sentence.trim();
+            if (sentence.length > 30 && sentence.length < 150) {
+                // Look for strategic insights
+                if (/strategy|plan|approach|tactic/i.test(sentence)) {
+                    agentAnalysis.keyPhrases.push(sentence);
                 }
             }
         });
     });
     
-    // Calculate overall scores
+    // Combine thought analysis with actual behavior
+    agents.forEach(agentId => {
+        const agentAnalysis = analysis.byAgent[agentId];
+        const behavior = sharingBehavior[agentId] || { shared: 0, proactive: 0 };
+        
+        // Calculate consistency between thoughts and actions
+        if (agentAnalysis.cooperation > 0) {
+            const cooperationRatio = behavior.proactive / Math.max(1, behavior.shared);
+            agentAnalysis.actualBehaviors.consistencyScore = cooperationRatio;
+        }
+        
+        // Adjust scores based on actual behavior
+        if (behavior.proactive > 2) {
+            agentAnalysis.cooperation += 2;
+        }
+        
+        // Check for deceptive behavior
+        const agentMessages = messages.filter(m => m.from === agentId);
+        const promisesToShare = agentMessages.filter(m => 
+            /will.*share|happy.*to.*help|send.*you/i.test(m.content || '')
+        ).length;
+        const actualShares = infoFlows.filter(f => 
+            (f.from_agent || f.from) === agentId
+        ).length;
+        
+        if (promisesToShare > actualShares * 2) {
+            agentAnalysis.deception += 3;
+        }
+    });
+    
+    // Calculate overall scores with normalization
     let totalCooperation = 0;
     let totalCompetition = 0;
     let totalDeception = 0;
     let totalThoughts = 0;
     
     Object.values(analysis.byAgent).forEach(agentAnalysis => {
-        totalCooperation += agentAnalysis.cooperation;
-        totalCompetition += agentAnalysis.competition;
-        totalDeception += agentAnalysis.deception;
-        totalThoughts += agentAnalysis.thoughtCount;
+        // Normalize by thought count
+        if (agentAnalysis.thoughtCount > 0) {
+            totalCooperation += agentAnalysis.cooperation / agentAnalysis.thoughtCount;
+            totalCompetition += agentAnalysis.competition / agentAnalysis.thoughtCount;
+            totalDeception += agentAnalysis.deception / agentAnalysis.thoughtCount;
+            totalThoughts++;
+        }
     });
     
     if (totalThoughts > 0) {
         analysis.overall.cooperationScore = (totalCooperation / totalThoughts) * 100;
         analysis.overall.competitionScore = (totalCompetition / totalThoughts) * 100;
-        analysis.overall.deceptionCount = totalDeception;
+        analysis.overall.deceptionCount = Math.round(totalDeception);
     }
     
     return analysis;
@@ -999,7 +1382,17 @@ function getDominantStrategy(agentAnalysis) {
 
 // Display message content analysis
 function displayMessageAnalysis() {
-    if (!simulationData.messages || simulationData.messages.length === 0) {
+    console.log('displayMessageAnalysis called - VERSION 2');
+    if (!simulationData || !simulationData.messages || simulationData.messages.length === 0) {
+        console.log('No messages available');
+        const chartEl = document.getElementById('messagePatternChart');
+        const analysisEl = document.getElementById('deceptionAnalysis');
+        if (chartEl) {
+            chartEl.parentElement.innerHTML = '<p class="text-muted text-center">No message data available</p>';
+        }
+        if (analysisEl) {
+            analysisEl.innerHTML = '<p class="text-muted">No message data available for analysis</p>';
+        }
         return;
     }
     
@@ -1007,7 +1400,12 @@ function displayMessageAnalysis() {
     const messageAnalysis = analyzeMessagePatterns(simulationData.messages);
     
     // Display message pattern chart
-    const ctx = document.getElementById('messagePatternChart').getContext('2d');
+    const canvas = document.getElementById('messagePatternChart');
+    if (!canvas) {
+        console.error('messagePatternChart canvas not found');
+        return;
+    }
+    const ctx = canvas.getContext('2d');
     new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -1045,7 +1443,7 @@ function displayMessageAnalysis() {
         }
     });
     
-    // Display deception analysis
+    // Display enhanced deception analysis
     const deceptionDiv = document.getElementById('deceptionAnalysis');
     let deceptionHtml = `
         <div class="card">
@@ -1054,19 +1452,34 @@ function displayMessageAnalysis() {
             </div>
             <div class="card-body">
                 <h6>Deception Indicators</h6>
-                <p class="text-muted small">Based on discrepancies between messages and private thoughts</p>
+                <p class="text-muted small">Based on discrepancies between messages, private thoughts, and actual behavior</p>
     `;
     
-    if (messageAnalysis.deception.instances.length > 0) {
+    // Sort deceptions by score
+    const sortedDeceptions = messageAnalysis.deception.instances
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+    
+    if (sortedDeceptions.length > 0) {
+        deceptionHtml += `<p class="small text-danger">Overall deception rate: ${messageAnalysis.deception.score.toFixed(1)}%</p>`;
         deceptionHtml += '<div class="list-group">';
-        messageAnalysis.deception.instances.slice(0, 5).forEach(instance => {
-            const agentNum = instance.agent.split('_')[1];
+        sortedDeceptions.forEach(instance => {
+            const agentNum = instance.getAgentNum(agent);
+            const typeColors = {
+                'false_promise': 'danger',
+                'manipulation': 'danger',
+                'false_cooperation': 'warning',
+                'false_enthusiasm': 'secondary',
+                'false_scarcity': 'warning',
+                'broken_promise': 'danger'
+            };
             deceptionHtml += `
                 <div class="list-group-item">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">
                             <span class="agent-badge agent-${agentNum}">${instance.agent}</span>
-                            <span class="badge bg-warning">Potential Deception</span>
+                            <span class="badge bg-${typeColors[instance.type] || 'warning'}">${instance.type.replace(/_/g, ' ')}</span>
+                            <small class="text-muted">(score: ${instance.score})</small>
                         </h6>
                         <small>Round ${instance.round}</small>
                     </div>
@@ -1076,17 +1489,53 @@ function displayMessageAnalysis() {
             `;
         });
         deceptionHtml += '</div>';
+        
+        // Show reliability scores
+        const reliableAgents = Object.entries(messageAnalysis.deception.reliability)
+            .sort((a, b) => b[1].reliabilityScore - a[1].reliabilityScore)
+            .slice(0, 5);
+        
+        deceptionHtml += `
+            <div class="mt-3">
+                <h6>Agent Reliability Scores</h6>
+                <div class="small">
+        `;
+        reliableAgents.forEach(([agent, data]) => {
+            const agentNum = getAgentNum(agent);
+            const reliabilityPercent = (data.reliabilityScore * 100).toFixed(1);
+            const barColor = reliabilityPercent >= 80 ? 'success' : reliabilityPercent >= 60 ? 'warning' : 'danger';
+            deceptionHtml += `
+                <div class="mb-2">
+                    <span class="agent-badge agent-${agentNum}">${agent}</span>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-${barColor}" style="width: ${reliabilityPercent}%">
+                            ${reliabilityPercent}% reliable
+                        </div>
+                    </div>
+                    <small class="text-muted">${data.deceptionCount} deceptions in ${data.messageCount} messages</small>
+                </div>
+            `;
+        });
+        deceptionHtml += '</div></div>';
     } else {
         deceptionHtml += '<p class="text-muted">No clear deception patterns detected</p>';
     }
     
     deceptionHtml += `
                 <div class="mt-3">
-                    <h6>Communication Patterns</h6>
+                    <h6>Trust Metrics</h6>
                     <ul class="list-unstyled">
-                        <li><strong>Promise/Delivery Rate:</strong> ${(messageAnalysis.trustMetrics.promiseDeliveryRate * 100).toFixed(1)}%</li>
+                        <li><strong>Promise Delivery Rate:</strong> ${(messageAnalysis.trustMetrics.promiseDeliveryRate * 100).toFixed(1)}%</li>
                         <li><strong>Request Success Rate:</strong> ${(messageAnalysis.trustMetrics.requestSuccessRate * 100).toFixed(1)}%</li>
-                        <li><strong>Information Accuracy:</strong> ${(messageAnalysis.trustMetrics.informationAccuracy * 100).toFixed(1)}%</li>
+                        <li><strong>Response Consistency:</strong> ${(messageAnalysis.trustMetrics.responseConsistency * 100).toFixed(1)}%</li>
+                        <li><strong>Reciprocity Score:</strong> ${(messageAnalysis.trustMetrics.reciprocityScore * 100).toFixed(1)}%</li>
+                    </ul>
+                </div>
+                <div class="mt-3">
+                    <h6>Communication Effectiveness</h6>
+                    <ul class="list-unstyled">
+                        <li><strong>Message Success Rate:</strong> ${(messageAnalysis.effectiveness.successRate * 100).toFixed(1)}%</li>
+                        <li><strong>Average Response Time:</strong> ${messageAnalysis.effectiveness.avgResponseTime.toFixed(1)}s</li>
                     </ul>
                 </div>
             </div>
@@ -1108,12 +1557,22 @@ function analyzeMessagePatterns(messages) {
             other: 0
         },
         deception: {
-            instances: []
+            instances: [],
+            score: 0,
+            reliability: {}
         },
         trustMetrics: {
             promiseDeliveryRate: 0,
             requestSuccessRate: 0,
             informationAccuracy: 1.0
+        },
+        effectiveness: {
+            successRate: 0,
+            avgResponseTime: 0,
+            messageImpact: {}
+        },
+        temporal: {
+            patternsOverTime: []
         }
     };
     
@@ -1159,9 +1618,12 @@ function analyzeMessagePatterns(messages) {
         }
     });
     
-    // Detect potential deception by comparing messages with private thoughts
-    if (simulationData.private_thoughts) {
+    // Enhanced deception detection with behavioral analysis
+    if (simulationData.private_thoughts && simulationData.information_flows) {
         const thoughtsByAgent = {};
+        const infoFlowsByAgent = {};
+        
+        // Organize thoughts by agent
         simulationData.private_thoughts.forEach(thought => {
             if (!thoughtsByAgent[thought.agent_id]) {
                 thoughtsByAgent[thought.agent_id] = [];
@@ -1169,83 +1631,669 @@ function analyzeMessagePatterns(messages) {
             thoughtsByAgent[thought.agent_id].push(thought);
         });
         
+        // Organize information flows by agent
+        simulationData.information_flows.forEach(flow => {
+            const from = flow.from_agent || flow.from;
+            if (!infoFlowsByAgent[from]) {
+                infoFlowsByAgent[from] = [];
+            }
+            infoFlowsByAgent[from].push(flow);
+        });
+        
+        // Analyze each agent's messages against their thoughts and actions
         messages.forEach(message => {
             if (message.from === 'system') return;
             
-            // Find corresponding thoughts near this message timestamp
             const agentThoughts = thoughtsByAgent[message.from] || [];
             const messageTime = new Date(message.timestamp || message.event_timestamp);
+            const agentFlows = infoFlowsByAgent[message.from] || [];
             
-            agentThoughts.forEach(thought => {
+            // Find thoughts near this message
+            const relevantThoughts = agentThoughts.filter(thought => {
                 const thoughtTime = new Date(thought.timestamp);
-                const timeDiff = Math.abs(messageTime - thoughtTime) / 1000; // seconds
+                const timeDiff = Math.abs(messageTime - thoughtTime) / 1000;
+                return timeDiff < 60; // Within 1 minute
+            });
+            
+            relevantThoughts.forEach(thought => {
+                const messageContent = message.content.toLowerCase();
+                const thoughtContent = thought.thoughts.toLowerCase();
+                let deceptionScore = 0;
+                let deceptionType = null;
                 
-                // If thought is within 30 seconds of message
-                if (timeDiff < 30) {
-                    const messageContent = message.content.toLowerCase();
-                    const thoughtContent = thought.thoughts.toLowerCase();
+                // Enhanced contradiction detection
+                const contradictions = [
+                    { message: /will\s+(share|provide|give)/i, thought: /withhold|keep|not\s+share/i, type: 'false_promise', weight: 3 },
+                    { message: /happy\s+to|glad\s+to/i, thought: /reluctant|don't\s+want|forced/i, type: 'false_enthusiasm', weight: 2 },
+                    { message: /cooperat|team|together/i, thought: /compet|against|beat/i, type: 'false_cooperation', weight: 3 },
+                    { message: /trust|honest/i, thought: /mislead|trick|deceive/i, type: 'manipulation', weight: 4 },
+                    { message: /don't\s+have|unavailable/i, thought: /have|possess|holding/i, type: 'false_scarcity', weight: 3 }
+                ];
+                
+                contradictions.forEach(contradiction => {
+                    if (contradiction.message.test(messageContent) && contradiction.thought.test(thoughtContent)) {
+                        deceptionScore += contradiction.weight;
+                        deceptionType = contradiction.type;
+                    }
+                });
+                
+                // Check if promises were kept
+                if (messageContent.includes('will share') || messageContent.includes('i can provide')) {
+                    // Check if they actually shared within reasonable time
+                    const futureFlows = agentFlows.filter(flow => {
+                        const flowTime = new Date(flow.timestamp);
+                        return flowTime > messageTime && (flowTime - messageTime) / 1000 < 300; // Within 5 minutes
+                    });
                     
-                    // Look for contradictions
-                    if ((messageContent.includes('will share') && thoughtContent.includes('withhold')) ||
-                        (messageContent.includes('happy to') && thoughtContent.includes('reluctant')) ||
-                        (messageContent.includes('cooperat') && thoughtContent.includes('compet')) ||
-                        (thoughtContent.includes('mislead') || thoughtContent.includes('trick'))) {
-                        
-                        analysis.deception.instances.push({
-                            agent: message.from,
-                            round: thought.round || 0,
-                            message: message.content.substring(0, 100),
-                            thought: thought.thoughts.substring(0, 100)
-                        });
+                    if (futureFlows.length === 0 && thoughtContent.includes('withhold')) {
+                        deceptionScore += 2;
+                        deceptionType = 'broken_promise';
+                    }
+                }
+                
+                if (deceptionScore > 0) {
+                    analysis.deception.instances.push({
+                        agent: message.from,
+                        round: thought.round || 0,
+                        message: message.content.substring(0, 150),
+                        thought: thought.thoughts.substring(0, 150),
+                        score: deceptionScore,
+                        type: deceptionType,
+                        timestamp: messageTime
+                    });
+                }
+            });
+        });
+        
+        // Calculate deception score for each agent
+        Object.keys(simulationData.agents).forEach(agent => {
+            const agentDeceptions = analysis.deception.instances.filter(d => d.agent === agent);
+            const totalMessages = messages.filter(m => m.from === agent).length;
+            
+            analysis.deception.reliability[agent] = {
+                deceptionCount: agentDeceptions.length,
+                deceptionScore: agentDeceptions.reduce((sum, d) => sum + d.score, 0),
+                messageCount: totalMessages,
+                reliabilityScore: totalMessages > 0 ? 1 - (agentDeceptions.length / totalMessages) : 1,
+                promises: 0,
+                fulfilled: 0,
+                requests: 0,
+                answered: 0
+            };
+        });
+        
+        // Calculate overall deception score
+        const totalDeceptions = analysis.deception.instances.length;
+        const totalMessages = messages.filter(m => m.from !== 'system').length;
+        analysis.deception.score = totalMessages > 0 ? (totalDeceptions / totalMessages) * 100 : 0;
+    }
+    
+    // Calculate actual trust metrics based on behavior
+    if (simulationData.information_flows) {
+        // Count promises and requests per agent
+        promises.forEach(promise => {
+            if (promise.from && analysis.deception.reliability[promise.from]) {
+                analysis.deception.reliability[promise.from].promises++;
+            }
+        });
+        
+        requests.forEach(request => {
+            if (request.from && analysis.deception.reliability[request.from]) {
+                analysis.deception.reliability[request.from].requests++;
+            }
+        });
+        
+        // Promise delivery rate
+        let promisesFulfilled = 0;
+        let totalPromises = 0;
+        
+        // promises is an array of messages, not a Map
+        promises.forEach(promise => {
+            totalPromises++;
+            // Check if information was actually sent after promise
+            const fulfilled = simulationData.information_flows.some(flow => {
+                const flowFrom = flow.from_agent || flow.from;
+                const flowTo = flow.to_agent || flow.to;
+                const flowTime = new Date(flow.timestamp);
+                const promiseTime = new Date(promise.timestamp);
+                return flowFrom === promise.from && flowTo === promise.to && 
+                       flowTime > promiseTime && 
+                       (flowTime - promiseTime) / 1000 < 300; // Within 5 minutes
+            });
+            if (fulfilled) {
+                promisesFulfilled++;
+                promise.fulfilled = true;
+                if (promise.from && analysis.deception.reliability[promise.from]) {
+                    analysis.deception.reliability[promise.from].fulfilled = 
+                        (analysis.deception.reliability[promise.from].fulfilled || 0) + 1;
+                }
+            }
+        });
+        
+        analysis.trustMetrics.promiseDeliveryRate = totalPromises > 0 ? promisesFulfilled / totalPromises : 1;
+        
+        // Request success rate
+        let successfulRequests = 0;
+        let totalRequests = 0;
+        
+        // requests is an array of messages, not a Map
+        requests.forEach(request => {
+            totalRequests++;
+            // Check if request was answered
+            const answered = simulationData.information_flows.some(flow => {
+                const flowTo = flow.to_agent || flow.to;
+                const flowFrom = flow.from_agent || flow.from;
+                const flowTime = new Date(flow.timestamp);
+                const requestTime = new Date(request.timestamp);
+                return flowTo === request.from && flowFrom === request.to &&
+                       flowTime > requestTime &&
+                       (flowTime - requestTime) / 1000 < 300; // Within 5 minutes
+            });
+            if (answered) {
+                successfulRequests++;
+                if (request.from && analysis.deception.reliability[request.from]) {
+                    analysis.deception.reliability[request.from].answered = 
+                        (analysis.deception.reliability[request.from].answered || 0) + 1;
+                }
+            }
+        });
+        
+        analysis.trustMetrics.requestSuccessRate = totalRequests > 0 ? successfulRequests / totalRequests : 0;
+        
+        // Response consistency
+        // Calculate based on actual reliability data
+        let totalConsistency = 0;
+        let agentCount = 0;
+        
+        Object.entries(analysis.deception.reliability).forEach(([agent, data]) => {
+            if (data.promises > 0 || data.requests > 0) {
+                const promiseRate = data.promises > 0 ? (data.fulfilled || 0) / data.promises : 1;
+                const requestRate = data.requests > 0 ? (data.answered || 0) / data.requests : 1;
+                data.consistencyScore = (promiseRate + requestRate) / 2;
+                totalConsistency += data.consistencyScore;
+                agentCount++;
+            }
+        });
+        
+        analysis.trustMetrics.responseConsistency = agentCount > 0 ? totalConsistency / agentCount : 1;
+        
+        // Calculate reciprocity score
+        let reciprocalPairs = 0;
+        let totalPairs = 0;
+        
+        const agents = Object.keys(simulationData.agents);
+        agents.forEach(agent1 => {
+            agents.forEach(agent2 => {
+                if (agent1 !== agent2) {
+                    totalPairs++;
+                    const gave = simulationData.information_flows.some(flow => 
+                        (flow.from_agent || flow.from) === agent1 && (flow.to_agent || flow.to) === agent2
+                    );
+                    const received = simulationData.information_flows.some(flow => 
+                        (flow.from_agent || flow.from) === agent2 && (flow.to_agent || flow.to) === agent1
+                    );
+                    if (gave && received) {
+                        reciprocalPairs++;
                     }
                 }
             });
         });
+        
+        analysis.trustMetrics.reciprocityScore = totalPairs > 0 ? reciprocalPairs / totalPairs : 0;
     }
     
-    // Calculate trust metrics
-    if (requests.length > 0) {
-        // Simple heuristic: if a request is followed by an information exchange, consider it successful
-        const successfulRequests = requests.filter(request => {
-            // Check if there's a subsequent info exchange to the requester
-            return simulationData.information_flows.some(flow => 
-                flow.to === request.from && 
-                new Date(flow.timestamp) > new Date(request.timestamp || request.event_timestamp)
-            );
+    // Calculate message effectiveness
+    const avgResponseTimes = [];
+    let impactfulMessages = 0;
+    let totalRequests = 0;
+    
+    // requests is an array of messages, not a Map
+    requests.forEach(request => {
+        totalRequests++;
+        // Find if request led to information exchange
+        const response = simulationData.information_flows.find(flow => {
+            const flowTo = flow.to_agent || flow.to;
+            const flowFrom = flow.from_agent || flow.from;
+            const flowTime = new Date(flow.timestamp);
+            const requestTime = new Date(request.timestamp);
+            return flowTo === request.from && flowFrom === request.to &&
+                   flowTime > requestTime;
         });
-        analysis.trustMetrics.requestSuccessRate = successfulRequests.length / requests.length;
-    }
+        
+        if (response) {
+            const responseTime = (new Date(response.timestamp) - new Date(request.timestamp)) / 1000;
+            avgResponseTimes.push(responseTime);
+            impactfulMessages++;
+            
+            if (!analysis.effectiveness.messageImpact[request.from]) {
+                analysis.effectiveness.messageImpact[request.from] = {
+                    sent: 0,
+                    successful: 0,
+                    avgResponseTime: 0
+                };
+            }
+            analysis.effectiveness.messageImpact[request.from].sent++;
+            analysis.effectiveness.messageImpact[request.from].successful++;
+        }
+    });
     
-    // All information exchanges are considered accurate in this simulation
-    analysis.trustMetrics.informationAccuracy = 1.0;
+    analysis.effectiveness.successRate = totalRequests > 0 ? impactfulMessages / totalRequests : 0;
+    analysis.effectiveness.avgResponseTime = avgResponseTimes.length > 0 ? 
+        avgResponseTimes.reduce((a, b) => a + b, 0) / avgResponseTimes.length : 0;
     
-    // Promise delivery rate (simplified)
-    analysis.trustMetrics.promiseDeliveryRate = promises.length > 0 ? 0.8 : 0; // Placeholder
+    // Temporal analysis - track trust evolution
+    // Skip temporal analysis as messages don't have round information
+    // This would need to be implemented with proper round tracking
     
     return analysis;
 }
 
-// Display agent network visualization with quantitative metrics
+// Display agent network visualization with information flow metrics
 function displayAgentNetwork() {
     if (!simulationData.communication_metrics || !simulationData.agents) {
         console.log('No network data available');
         return;
     }
     
-    // Calculate all network metrics first
-    const networkMetrics = calculateNetworkMetrics();
-    
-    // Display each visualization
-    displayCommunicationHeatmap(networkMetrics.commMatrix);
-    displayResponseRateHeatmap(networkMetrics.responseMatrix);
-    displayInfoFlowBalance(networkMetrics.infoBalance);
-    displayCommunicationEfficiency(networkMetrics.efficiency);
-    displayCentralityMetrics(networkMetrics.centrality);
-    displayNetworkEvolution(networkMetrics.evolution);
-    displayNetworkInsights(networkMetrics);
+    try {
+        // Calculate comprehensive information flow metrics
+        const infoFlowMetrics = calculateInformationFlowMetrics();
+        
+        // Display visualizations
+        displayInformationVelocity(infoFlowMetrics.velocity);
+        displayRequestFulfillmentRatio(infoFlowMetrics.fulfillment);
+        displayInformationDistribution(infoFlowMetrics.distribution);
+        displayInformationExchangeMatrix();
+        displayAgentPerformanceTable();
+    } catch (error) {
+        console.error('Error in displayAgentNetwork:', error);
+        // Still try to display what we can
+        try {
+            displayInformationExchangeMatrix();
+            displayAgentPerformanceTable();
+        } catch (innerError) {
+            console.error('Error displaying basic network info:', innerError);
+        }
+    }
 }
 
-// Calculate comprehensive network metrics
+// Calculate comprehensive information flow metrics
+function calculateInformationFlowMetrics() {
+    const messages = simulationData.messages || [];
+    const infoFlows = simulationData.information_flows || [];
+    const events = simulationData.all_events || [];
+    const agents = Object.keys(simulationData.agents || {});
+    
+    // Initialize metrics
+    const metrics = {
+        velocity: {},
+        fulfillment: {},
+        distribution: {
+            redundancy: {},
+            entropy: [],
+            gini: []
+        }
+    };
+    
+    // Track requests and responses
+    const requests = {};
+    const requestTimestamps = {};
+    
+    // Parse messages for requests
+    messages.forEach(msg => {
+        if (msg.from !== 'system' && msg.to !== 'system') {
+            const content = (msg.content || '').toLowerCase();
+            if (content.includes('need') || content.includes('require') || content.includes('please') || content.includes('could you')) {
+                // Extract requested information pieces
+                const key = `${msg.from}-${msg.to}`;
+                if (!requests[key]) requests[key] = [];
+                requests[key].push({
+                    timestamp: msg.timestamp,
+                    content: msg.content
+                });
+                
+                // Track request timestamp for velocity calculation
+                const reqKey = `${msg.to}-${msg.from}`;
+                if (!requestTimestamps[reqKey]) requestTimestamps[reqKey] = [];
+                requestTimestamps[reqKey].push(new Date(msg.timestamp));
+            }
+        }
+    });
+    
+    // Calculate information velocity
+    const velocities = [];
+    infoFlows.forEach(flow => {
+        const from = flow.from_agent || flow.from;
+        const to = flow.to_agent || flow.to;
+        const key = `${from}-${to}`;
+        
+        if (requestTimestamps[key] && requestTimestamps[key].length > 0) {
+            const flowTime = new Date(flow.timestamp);
+            // Find the most recent request before this flow
+            const recentRequests = requestTimestamps[key].filter(reqTime => reqTime < flowTime);
+            if (recentRequests.length > 0) {
+                const lastRequest = Math.max(...recentRequests);
+                const velocity = (flowTime - lastRequest) / 1000; // seconds
+                velocities.push({
+                    from: from,
+                    to: to,
+                    velocity: velocity,
+                    pieces: flow.information.length
+                });
+                
+                if (!metrics.velocity[from]) metrics.velocity[from] = [];
+                metrics.velocity[from].push(velocity);
+            }
+        }
+    });
+    
+    // Calculate request-to-fulfillment ratio
+    agents.forEach(agent => {
+        let requestsSent = 0;
+        let piecesReceived = 0;
+        
+        // Count requests sent
+        Object.keys(requests).forEach(key => {
+            if (key.startsWith(agent + '-')) {
+                requestsSent += requests[key].length;
+            }
+        });
+        
+        // Count pieces received
+        infoFlows.forEach(flow => {
+            const to = flow.to_agent || flow.to;
+            if (to === agent) {
+                piecesReceived += flow.information.length;
+            }
+        });
+        
+        metrics.fulfillment[agent] = {
+            requests: requestsSent,
+            received: piecesReceived,
+            ratio: requestsSent > 0 ? piecesReceived / requestsSent : 0
+        };
+    });
+    
+    // Calculate information distribution metrics
+    // Track which agents have which information pieces over time
+    const infoDistribution = {};
+    const roundDistributions = {};
+    
+    // Initialize agents with their starting information
+    if (events && events.length > 0) {
+        const simStart = events.find(e => e.event_type === 'simulation_start');
+        if (simStart) {
+            // Track initial distribution (this would need to be extracted from the simulation data)
+            // For now, we'll track from information exchanges
+        }
+    }
+    
+    // Track information movement
+    let currentRound = 1;
+    infoFlows.forEach(flow => {
+        const to = flow.to_agent || flow.to;
+        if (!infoDistribution[to]) infoDistribution[to] = new Set();
+        
+        flow.information.forEach(piece => {
+            infoDistribution[to].add(piece);
+            
+            // Track redundancy
+            if (!metrics.distribution.redundancy[piece]) {
+                metrics.distribution.redundancy[piece] = new Set();
+            }
+            metrics.distribution.redundancy[piece].add(to);
+        });
+        
+        // Calculate distribution metrics per round
+        const flowRound = flow.round || (flow.data && flow.data.round);
+        if (flowRound && flowRound !== currentRound) {
+            currentRound = flowRound;
+            roundDistributions[currentRound] = calculateDistributionMetrics(infoDistribution, agents);
+        }
+    });
+    
+    // Calculate final distribution metrics
+    const finalMetrics = calculateDistributionMetrics(infoDistribution, agents);
+    metrics.distribution.entropy = finalMetrics.entropy;
+    metrics.distribution.gini = finalMetrics.gini;
+    metrics.distribution.timeline = roundDistributions;
+    
+    return metrics;
+}
+
+// Calculate distribution metrics (entropy and Gini coefficient)
+function calculateDistributionMetrics(distribution, agents) {
+    // Count pieces per agent
+    const pieceCounts = agents.map(agent => {
+        const pieces = distribution[agent] || new Set();
+        return pieces.size;
+    });
+    
+    const total = pieceCounts.reduce((a, b) => a + b, 0);
+    
+    // Calculate Shannon entropy
+    let entropy = 0;
+    if (total > 0) {
+        pieceCounts.forEach(count => {
+            if (count > 0) {
+                const p = count / total;
+                entropy -= p * Math.log2(p);
+            }
+        });
+    }
+    
+    // Calculate Gini coefficient
+    const sortedCounts = [...pieceCounts].sort((a, b) => a - b);
+    let cumulativeWealth = 0;
+    let cumulativeScore = 0;
+    
+    sortedCounts.forEach((count, i) => {
+        cumulativeWealth += count;
+        cumulativeScore += cumulativeWealth;
+    });
+    
+    const gini = total > 0 ? 
+        1 - (2 * cumulativeScore) / (agents.length * total) : 0;
+    
+    return { entropy, gini, pieceCounts };
+}
+
+// Display information velocity chart
+function displayInformationVelocity(velocityData) {
+    const container = document.getElementById('infoVelocity');
+    if (!container) {
+        console.log('Information velocity container not found');
+        return;
+    }
+    
+    container.innerHTML = '<h5 class="text-center mb-3">Information Velocity</h5>';
+    
+    if (!velocityData || Object.keys(velocityData).length === 0) {
+        container.innerHTML += '<p class="text-muted text-center">No velocity data available</p>';
+        return;
+    }
+    
+    // Calculate average velocity per agent
+    const avgVelocities = {};
+    Object.entries(velocityData).forEach(([agent, velocities]) => {
+        if (velocities.length > 0) {
+            avgVelocities[agent] = velocities.reduce((a, b) => a + b, 0) / velocities.length;
+        }
+    });
+    
+    // Create chart
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    
+    const agents = Object.keys(simulationData.agents).sort();
+    const velocityValues = agents.map(agent => avgVelocities[agent] || 0);
+    
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: agents.map(a => a.replace('agent_', 'A')),
+            datasets: [{
+                label: 'Avg Response Time (seconds)',
+                data: velocityValues,
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Response Time (seconds)'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Add summary stats
+    const avgOverall = velocityValues.filter(v => v > 0).reduce((a, b) => a + b, 0) / 
+                      velocityValues.filter(v => v > 0).length || 0;
+    const summaryDiv = document.createElement('div');
+    summaryDiv.className = 'text-center mt-2';
+    summaryDiv.innerHTML = `<small class="text-muted">Average response time: ${avgOverall.toFixed(1)}s</small>`;
+    container.appendChild(summaryDiv);
+}
+
+// Display request fulfillment ratio
+function displayRequestFulfillmentRatio(fulfillmentData) {
+    const container = document.getElementById('requestFulfillment');
+    if (!container) {
+        console.log('Request fulfillment container not found');
+        return;
+    }
+    
+    container.innerHTML = '<h5 class="text-center mb-3">Request-to-Fulfillment Ratio</h5>';
+    
+    if (!fulfillmentData || Object.keys(fulfillmentData).length === 0) {
+        container.innerHTML += '<p class="text-muted text-center">No fulfillment data available</p>';
+        return;
+    }
+    
+    const agents = Object.keys(simulationData.agents || {}).sort();
+    const ratioData = agents.map(agent => {
+        const data = fulfillmentData[agent] || { requests: 0, received: 0, ratio: 0 };
+        return data.ratio;
+    });
+    
+    // Create chart
+    const canvas = document.createElement('canvas');
+    container.appendChild(canvas);
+    
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: agents.map(a => a.replace('agent_', 'A')),
+            datasets: [{
+                label: 'Pieces Received per Request',
+                data: ratioData,
+                backgroundColor: ratioData.map(r => 
+                    r > 1 ? 'rgba(75, 192, 192, 0.5)' : 
+                    r > 0.5 ? 'rgba(255, 206, 86, 0.5)' : 
+                    'rgba(255, 99, 132, 0.5)'
+                ),
+                borderColor: ratioData.map(r => 
+                    r > 1 ? 'rgba(75, 192, 192, 1)' : 
+                    r > 0.5 ? 'rgba(255, 206, 86, 1)' : 
+                    'rgba(255, 99, 132, 1)'
+                ),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Fulfillment Ratio'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const agent = agents[context.dataIndex];
+                            const data = fulfillmentData[agent];
+                            return `Requests: ${data.requests}, Received: ${data.received}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Display information distribution metrics
+function displayInformationDistribution(distributionData) {
+    const container = document.getElementById('infoDistribution');
+    if (!container) {
+        console.log('Information distribution container not found');
+        return;
+    }
+    
+    container.innerHTML = '<h5 class="text-center mb-3">Information Distribution Metrics</h5>';
+    
+    if (!distributionData) {
+        container.innerHTML += '<p class="text-muted text-center">No distribution data available</p>';
+        return;
+    }
+    
+    // Create two sub-containers for entropy and Gini
+    const metricsRow = document.createElement('div');
+    metricsRow.className = 'row';
+    
+    // Display entropy and Gini values
+    const entropyCol = document.createElement('div');
+    entropyCol.className = 'col-md-6 text-center';
+    entropyCol.innerHTML = `
+        <h6>Shannon Entropy</h6>
+        <h2>${distributionData.entropy.toFixed(3)}</h2>
+        <small class="text-muted">Higher = more distributed</small>
+    `;
+    
+    const giniCol = document.createElement('div');
+    giniCol.className = 'col-md-6 text-center';
+    giniCol.innerHTML = `
+        <h6>Gini Coefficient</h6>
+        <h2>${distributionData.gini.toFixed(3)}</h2>
+        <small class="text-muted">Lower = more equal distribution</small>
+    `;
+    
+    metricsRow.appendChild(entropyCol);
+    metricsRow.appendChild(giniCol);
+    container.appendChild(metricsRow);
+    
+    // Display redundancy information
+    if (distributionData.redundancy && Object.keys(distributionData.redundancy).length > 0) {
+        const redundancyDiv = document.createElement('div');
+        redundancyDiv.className = 'mt-4';
+        redundancyDiv.innerHTML = '<h6 class="text-center">Information Redundancy</h6>';
+        
+        // Calculate average redundancy
+        const redundancyCounts = Object.values(distributionData.redundancy).map(set => set.size);
+        const avgRedundancy = redundancyCounts.reduce((a, b) => a + b, 0) / redundancyCounts.length;
+        
+        const summaryP = document.createElement('p');
+        summaryP.className = 'text-center';
+        summaryP.innerHTML = `<small>Average pieces held by ${avgRedundancy.toFixed(1)} agents</small>`;
+        redundancyDiv.appendChild(summaryP);
+        
+        container.appendChild(redundancyDiv);
+    }
+}
+
+// Calculate comprehensive network metrics (simplified)
 function calculateNetworkMetrics() {
     const agents = Object.keys(simulationData.agents);
     const commMatrix = simulationData.communication_metrics.communication_matrix;
@@ -1382,6 +2430,147 @@ function calculateNetworkMetrics() {
     });
     
     return metrics;
+}
+
+// Display information exchange matrix as a simple heatmap
+function displayInformationExchangeMatrix() {
+    const container = document.getElementById('infoExchangeMatrix');
+    if (!container) return;
+    
+    // Clear previous content
+    container.innerHTML = '<h5 class="text-center mb-3">Information Exchange Matrix</h5>';
+    
+    const agents = Object.keys(simulationData.agents).sort();
+    const infoFlows = simulationData.information_flows || [];
+    
+    // Build exchange matrix
+    const matrix = {};
+    agents.forEach(from => {
+        matrix[from] = {};
+        agents.forEach(to => {
+            matrix[from][to] = 0;
+        });
+    });
+    
+    // Count information pieces exchanged
+    infoFlows.forEach(flow => {
+        const from = flow.from_agent || flow.from;
+        const to = flow.to_agent || flow.to;
+        if (from && to && from !== to) {
+            matrix[from][to] += flow.information.length;
+        }
+    });
+    
+    // Create table
+    const table = document.createElement('table');
+    table.className = 'table table-sm table-bordered text-center';
+    
+    // Header row
+    const headerRow = table.insertRow();
+    headerRow.insertCell().innerHTML = '<strong>From \\ To</strong>';
+    agents.forEach(agent => {
+        const cell = headerRow.insertCell();
+        cell.innerHTML = `<strong>${agent.replace('agent_', 'A')}</strong>`;
+        cell.style.fontSize = '12px';
+    });
+    
+    // Data rows
+    agents.forEach(fromAgent => {
+        const row = table.insertRow();
+        const headerCell = row.insertCell();
+        headerCell.innerHTML = `<strong>${fromAgent.replace('agent_', 'A')}</strong>`;
+        headerCell.style.fontSize = '12px';
+        
+        agents.forEach(toAgent => {
+            const cell = row.insertCell();
+            const value = matrix[fromAgent][toAgent];
+            cell.textContent = value || '-';
+            
+            // Color coding
+            if (fromAgent === toAgent) {
+                cell.style.backgroundColor = '#f0f0f0';
+            } else if (value > 0) {
+                const intensity = Math.min(value / 10, 1);
+                cell.style.backgroundColor = `rgba(13, 110, 253, ${intensity * 0.8})`;
+                cell.style.color = intensity > 0.5 ? 'white' : 'black';
+            }
+        });
+    });
+    
+    container.appendChild(table);
+    
+    // Add legend
+    const legend = document.createElement('div');
+    legend.className = 'text-center mt-2';
+    legend.innerHTML = '<small class="text-muted">Numbers indicate pieces of information shared</small>';
+    container.appendChild(legend);
+}
+
+// Display agent performance table
+function displayAgentPerformanceTable() {
+    const container = document.getElementById('agentPerformance');
+    if (!container) return;
+    
+    // Clear previous content
+    container.innerHTML = '<h5 class="text-center mb-3">Agent Performance Summary</h5>';
+    
+    // Get agent data
+    const agents = Object.entries(simulationData.agents)
+        .map(([id, data]) => ({
+            id: id,
+            score: data.score || 0,
+            tasks: data.tasks_completed || 0,
+            infoSent: data.information_sent || 0,
+            infoReceived: data.information_received || 0,
+            messages: data.messages_sent || 0,
+            efficiency: data.messages_sent > 0 ? 
+                (data.information_received / data.messages_sent).toFixed(2) : '0.00'
+        }))
+        .sort((a, b) => b.score - a.score);
+    
+    // Create table
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-sm';
+    
+    // Header
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Agent</th>
+                <th>Score</th>
+                <th>Tasks</th>
+                <th>Info Sent</th>
+                <th>Info Received</th>
+                <th>Messages</th>
+                <th>Efficiency</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    `;
+    
+    // Body
+    const tbody = table.querySelector('tbody');
+    agents.forEach((agent, index) => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td><span class="agent-badge agent-${agent.id.split('_')[1]}">${agent.id}</span></td>
+            <td><strong>${agent.score}</strong></td>
+            <td>${agent.tasks}</td>
+            <td>${agent.infoSent}</td>
+            <td>${agent.infoReceived}</td>
+            <td>${agent.messages}</td>
+            <td>${agent.efficiency}</td>
+        `;
+        
+        // Highlight top 3
+        if (index < 3) {
+            row.classList.add('table-success');
+        }
+    });
+    
+    container.appendChild(table);
 }
 
 // Display communication volume heatmap
@@ -1949,7 +3138,7 @@ function displayEnhancedStrategicAnalysis(strategicData) {
     html += '<div class="row">';
     
     Object.entries(strategicData).forEach(([agentId, data]) => {
-        const agentNum = agentId.split('_')[1];
+        const agentNum = getAgentNum(agentId);
         const dominantStrategy = getEnhancedDominantStrategy(data);
         
         html += `
@@ -2075,32 +3264,75 @@ function getStrategyColor(strategy) {
     return colors[strategy] || 'bg-secondary';
 }
 
-// Display communication effectiveness analysis
+// Enhanced communication effectiveness analysis
 function displayCommunicationEffectiveness() {
-    if (!simulationData.communication_correlation) return;
-    
     const effectivenessDiv = document.getElementById('communicationEffectiveness');
-    let html = '<div class="row">';
     
-    Object.entries(simulationData.communication_correlation).forEach(([agentId, data]) => {
-        const agentNum = agentId.split('_')[1];
+    // Get message analysis for enhanced metrics
+    const messageAnalysis = analyzeMessagePatterns(simulationData.messages || []);
+    
+    // Create temporal analysis chart
+    let html = '<div class="row mb-4">';
+    
+    // Add temporal pattern evolution
+    if (messageAnalysis.temporal.patternsOverTime.length > 0) {
+        html += `
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6>Communication Pattern Evolution</h6>
+                        <canvas id="temporalPatternsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div><div class="row">';
+    
+    // Display agent-specific effectiveness
+    Object.keys(simulationData.agents).forEach(agentId => {
+        const agentNum = getAgentNum(agentId);
+        const agentEffectiveness = messageAnalysis.effectiveness.messageImpact[agentId] || { sent: 0, successful: 0 };
+        const reliability = messageAnalysis.deception.reliability[agentId] || { reliabilityScore: 1 };
+        const correlationData = simulationData.communication_correlation?.[agentId] || {};
         
         html += `
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-header">
-                        <h6><span class="agent-badge agent-${agentNum}">${agentId}</span> Communication Analysis</h6>
+                        <h6><span class="agent-badge agent-${agentNum}">${agentId}</span> Communication Profile</h6>
                     </div>
                     <div class="card-body">
         `;
         
-        // Show ignored by list
-        if (data.ignored_by && data.ignored_by.length > 0) {
+        // Show communication effectiveness metrics
+        const successRate = agentEffectiveness.sent > 0 ? 
+            (agentEffectiveness.successful / agentEffectiveness.sent * 100).toFixed(1) : 0;
+        
+        html += `
+            <div class="mb-3">
+                <h6 class="small">Effectiveness Metrics</h6>
+                <div class="progress mb-2" style="height: 25px;">
+                    <div class="progress-bar bg-info" style="width: ${successRate}%">
+                        ${successRate}% Request Success
+                    </div>
+                </div>
+                <div class="progress mb-2" style="height: 25px;">
+                    <div class="progress-bar bg-${reliability.reliabilityScore >= 0.8 ? 'success' : 'warning'}" 
+                         style="width: ${reliability.reliabilityScore * 100}%">
+                        ${(reliability.reliabilityScore * 100).toFixed(1)}% Reliability
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Show ignored by list if available
+        if (correlationData.ignored_by && correlationData.ignored_by.length > 0) {
             html += `
                 <div class="alert alert-warning small">
-                    <strong>Being ignored by:</strong> ${data.ignored_by.map(a => 
-                        `<span class="agent-badge agent-${a.split('_')[1]}">${a}</span>`
-                    ).join(', ')}
+                    <strong>Being ignored by:</strong> ${correlationData.ignored_by.map(a => 
+                        `<span class="agent-badge agent-${a.split('_')[1]}">${a}</span>`).join(', ')}
                     <br><small>Sent multiple messages but received no information</small>
                 </div>
             `;
@@ -2110,7 +3342,7 @@ function displayCommunicationEffectiveness() {
         html += '<h6 class="mt-3">Communication Effectiveness:</h6>';
         html += '<div class="small">';
         
-        Object.entries(data.communication_effectiveness || {}).forEach(([targetAgent, effectiveness]) => {
+        Object.entries(correlationData.communication_effectiveness || {}).forEach(([targetAgent, effectiveness]) => {
             const targetNum = targetAgent.split('_')[1];
             const badgeColor = effectiveness.effectiveness_score > 0.5 ? 'success' : 
                                effectiveness.effectiveness_score > 0 ? 'warning' : 'danger';
@@ -2136,7 +3368,7 @@ function displayCommunicationEffectiveness() {
             html += '<ul class="list-unstyled small">';
             
             Object.entries(data.messages_required_per_info).forEach(([agent, ratio]) => {
-                const num = agent.split('_')[1];
+                const num = getAgentNum(agent);
                 html += `
                     <li>
                         <span class="agent-badge agent-${num}">${agent}</span>: 
@@ -2153,37 +3385,127 @@ function displayCommunicationEffectiveness() {
     
     html += '</div>';
     effectivenessDiv.innerHTML = html;
+    
+    // Render temporal patterns chart if data exists
+    if (messageAnalysis.temporal.patternsOverTime.length > 0) {
+        setTimeout(() => {
+            const ctx = document.getElementById('temporalPatternsChart');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: messageAnalysis.temporal.patternsOverTime.map(d => `Round ${d.round}`),
+                        datasets: [
+                            {
+                                label: 'Requests',
+                                data: messageAnalysis.temporal.patternsOverTime.map(d => d.patterns.requests || 0),
+                                borderColor: '#FF6B6B',
+                                backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Offers',
+                                data: messageAnalysis.temporal.patternsOverTime.map(d => d.patterns.offers || 0),
+                                borderColor: '#4ECDC4',
+                                backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Confirmations',
+                                data: messageAnalysis.temporal.patternsOverTime.map(d => d.patterns.confirmations || 0),
+                                borderColor: '#45B7D1',
+                                backgroundColor: 'rgba(69, 183, 209, 0.1)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Refusals',
+                                data: messageAnalysis.temporal.patternsOverTime.map(d => d.patterns.refusals || 0),
+                                borderColor: '#F7B731',
+                                backgroundColor: 'rgba(247, 183, 49, 0.1)',
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        plugins: {
+                            title: {
+                                display: false
+                            },
+                            legend: {
+                                position: 'bottom'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Simulation Round'
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Number of Messages'
+                                },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }, 100);
+    }
 }
 
 // Initialize strategic reports
 function initializeStrategicReports() {
-    const reportSelect = document.getElementById('reportAgentSelect');
-    
-    // Populate agent selector
-    reportSelect.innerHTML = '<option value="">Select an agent...</option>';
-    Object.keys(simulationData.strategic_reports).forEach(agentId => {
-        const option = document.createElement('option');
-        option.value = agentId;
-        option.textContent = agentId;
-        reportSelect.appendChild(option);
-    });
-    
-    // Set up event listener
-    reportSelect.addEventListener('change', function(e) {
-        if (e.target.value) {
-            displayAgentStrategicReports(e.target.value);
-        } else {
-            document.getElementById('strategicReportsContent').innerHTML = 
-                '<p class="text-muted">Select an agent to view their strategic reports throughout the simulation.</p>';
+    try {
+        const reportSelect = document.getElementById('reportAgentSelect');
+        
+        if (!reportSelect) {
+            console.error('Report agent select element not found');
+            return;
         }
-    });
+        
+        // Populate agent selector
+        reportSelect.innerHTML = '<option value="">Select an agent...</option>';
+        
+        if (!simulationData.strategic_reports) {
+            console.log('No strategic reports data available');
+            return;
+        }
+        
+        Object.keys(simulationData.strategic_reports).forEach(agentId => {
+            const option = document.createElement('option');
+            option.value = agentId;
+            option.textContent = agentId;
+            reportSelect.appendChild(option);
+        });
+        
+        // Set up event listener
+        reportSelect.addEventListener('change', function(e) {
+            if (e.target.value) {
+                displayAgentStrategicReports(e.target.value);
+            } else {
+                document.getElementById('strategicReportsContent').innerHTML = 
+                    '<p class="text-muted">Select an agent to view their strategic reports throughout the simulation.</p>';
+            }
+        });
+    } catch (error) {
+        console.error('Error in initializeStrategicReports:', error);
+    }
 }
 
 // Display strategic reports for selected agent
 function displayAgentStrategicReports(agentId) {
     const reports = simulationData.strategic_reports[agentId];
     const agentData = simulationData.agents[agentId];
-    const agentNum = agentId.split('_')[1];
+    const agentNum = getAgentNum(agentId);
     
     // Update agent info
     const infoDiv = document.getElementById('reportAgentInfo');
@@ -2276,37 +3598,7 @@ function displayAgentStrategicReports(agentId) {
     contentDiv.innerHTML = html;
 }
 
-// Update quantitative analysis to include communication effectiveness
-function displayQuantitativeAnalysis() {
-    const perfMetrics = simulationData.performance_metrics;
-    const commMetrics = simulationData.communication_metrics;
-    
-    if (!perfMetrics || !commMetrics) {
-        console.error('Metrics data not available');
-        return;
-    }
-    
-    // Display overall metrics
-    document.getElementById('totalTasks').textContent = perfMetrics.overall.total_tasks_completed;
-    document.getElementById('totalPoints').textContent = perfMetrics.overall.total_points_awarded;
-    document.getElementById('avgPointsPerTask').textContent = perfMetrics.overall.average_points_per_task.toFixed(1);
-    document.getElementById('firstCompletionRate').textContent = (perfMetrics.overall.first_completion_rate * 100).toFixed(1) + '%';
-    
-    // Display agent performance table
-    displayAgentPerformanceTable(perfMetrics.by_agent);
-    
-    // Display communication charts
-    displayCommunicationCharts(commMetrics);
-    
-    // Display cooperation matrix
-    displayCooperationMatrix(commMetrics.info_flow_matrix);
-    
-    // Display message content analysis
-    displayMessageAnalysis();
-    
-    // Display communication effectiveness
-    displayCommunicationEffectiveness();
-}
+// Removed duplicate displayQuantitativeAnalysis function
 
 // Display cooperation analysis
 function displayCooperationAnalysis() {
@@ -2478,7 +3770,7 @@ function displayMisperceptionAnalysis(misperception) {
         html += '<p class="small text-muted">Agents perceived as cooperative but actually hoarding information</p>';
         
         misperception.false_cooperators.forEach(agent => {
-            const agentNum = agent.agent.split('_')[1];
+            const agentNum = agent.getAgentNum(agent);
             html += `
                 <div class="mb-2">
                     <span class="agent-badge agent-${agentNum}">${agent.agent}</span>
@@ -2508,7 +3800,7 @@ function displayMisperceptionAnalysis(misperception) {
         html += '<p class="small text-muted">Agents who share freely but aren\'t recognized</p>';
         
         misperception.undervalued_cooperators.forEach(agent => {
-            const agentNum = agent.agent.split('_')[1];
+            const agentNum = agent.getAgentNum(agent);
             html += `
                 <div class="mb-2">
                     <span class="agent-badge agent-${agentNum}">${agent.agent}</span>
@@ -2610,7 +3902,7 @@ function displayCooperationNetworks(networks) {
         // Draw nodes
         agentList.forEach(agent => {
             const pos = positions[agent];
-            const agentNum = agent.split('_')[1];
+            const agentNum = getAgentNum(agent);
             const isIsolated = networks.isolated_agents && networks.isolated_agents.includes(agent);
             
             // Node circle
@@ -2756,7 +4048,7 @@ function displayCooperationPerformanceTable(agentPerformance, infoHoarding) {
         .sort((a, b) => a[1].final_rank - b[1].final_rank);
     
     sortedAgents.forEach(([agentId, perf]) => {
-        const agentNum = agentId.split('_')[1];
+        const agentNum = getAgentNum(agentId);
         const hoarding = infoHoarding[agentId] || {};
         
         const row = document.createElement('tr');
