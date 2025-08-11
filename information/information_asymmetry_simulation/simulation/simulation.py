@@ -7,9 +7,10 @@ from typing import Dict, List, Any
 from datetime import datetime
 import json
 import statistics
+import random
 
 from .agent import Agent
-from .tasks import TaskManager, InformationManager
+from .tasks import TaskManager, InformationManager, InformationPiece
 from .communication import CommunicationSystem
 from .scoring import ScoringSystem
 from .logger import SimulationLogger
@@ -113,32 +114,18 @@ class SimulationManager:
         # Build current state for all agents
         current_state = self._build_current_state()
         
-        # Check if this is a report round (every 3 rounds)
-        is_report_round = (self.current_round % 3 == 0)
+        # Check if this is a report round based on configuration
+        report_freq = self.config.get('simulation', {}).get('report_frequency', 3)
+        is_report_round = (report_freq > 0 and self.current_round % report_freq == 0)
         
-        # If it's a report round, collect reports first
-        if is_report_round:
-            self.logger.info(f"Round {self.current_round}: Requesting strategic reports from all agents")
-            collected_reports = {}
-            
-            for agent_id, agent in self.agents.items():
-                self.logger.debug(f"Requesting report from {agent_id}")
-                report_actions = agent.take_turn(current_state, self.current_round, request_report=True)
-                
-                if report_actions:
-                    for action in report_actions:
-                        if action['action'] == 'submit_report':
-                            self.sim_logger.log_agent_report(agent_id, self.current_round, action['report'])
-                            round_results['reports_submitted'] += 1
-                            collected_reports[agent_id] = action['report']
-                            self.logger.info(f"Received strategic report from {agent_id}")
-            
-            # Aggregate cooperation scores after all reports are collected
-            if collected_reports:
-                self._aggregate_cooperation_scores(collected_reports)
+        # Randomize agent turn order for this round
+        agent_order = list(self.agents.keys())
+        random.shuffle(agent_order)
+        self.logger.info(f"Round {self.current_round} turn order: {', '.join(agent_order)}")
         
-        # Each agent takes their turn (normal actions)
-        for agent_id, agent in self.agents.items():
+        # Each agent takes their turn (normal actions first)
+        for agent_id in agent_order:
+            agent = self.agents[agent_id]
             self.logger.debug(f"Agent {agent_id} taking turn...")
             
             # Get agent's actions (now returns a list)
@@ -173,6 +160,35 @@ class SimulationManager:
                     elif action['action'] in ['send_message', 'broadcast']:
                         round_results['messages_sent'] += 1
         
+        # After all normal actions are complete, collect strategic reports if this is a report round
+        if is_report_round:
+            self.logger.info(f"Round {self.current_round}: Requesting strategic reports from all agents (after actions)")
+            collected_reports = {}
+            
+            # Build updated current state for report generation (includes all round actions)
+            current_state = self._build_current_state()
+            
+            # Randomize report collection order
+            report_order = list(self.agents.keys())
+            random.shuffle(report_order)
+            
+            for agent_id in report_order:
+                agent = self.agents[agent_id]
+                self.logger.debug(f"Requesting report from {agent_id}")
+                report_actions = agent.take_turn(current_state, self.current_round, request_report=True)
+                
+                if report_actions:
+                    for action in report_actions:
+                        if action['action'] == 'submit_report':
+                            self.sim_logger.log_agent_report(agent_id, self.current_round, action['report'])
+                            round_results['reports_submitted'] += 1
+                            collected_reports[agent_id] = action['report']
+                            self.logger.info(f"Received strategic report from {agent_id}")
+            
+            # Aggregate cooperation scores after all reports are collected
+            if collected_reports:
+                self._aggregate_cooperation_scores(collected_reports)
+        
         return round_results
     
     def _build_current_state(self) -> Dict[str, Any]:
@@ -191,7 +207,12 @@ class SimulationManager:
             return self._process_message(agent_id, action['to'], action['content'])
             
         elif action_type == 'send_information':
-            return self._process_information_transfer(agent_id, action['to'], action['information'])
+            # Extract values (required field, but handle gracefully if missing for backward compat)
+            custom_values = action.get('values', None)
+            if custom_values is None:
+                # If values not provided (shouldn't happen with new prompt), use original values
+                self.logger.warning(f"Agent {agent_id} sent information without values field - using original values")
+            return self._process_information_transfer(agent_id, action['to'], action['information'], custom_values)
             
         elif action_type == 'broadcast':
             return self._process_broadcast(agent_id, action['content'])
@@ -231,7 +252,8 @@ class SimulationManager:
         self.communication.broadcast_message(from_agent, content)
         return {'success': True}
     
-    def _process_information_transfer(self, from_agent: str, to_agent: str, information: List[str]) -> Dict[str, Any]:
+    def _process_information_transfer(self, from_agent: str, to_agent: str, information: List[str], 
+                                     custom_values: Dict[str, int] = None) -> Dict[str, Any]:
         """Process information transfer from one agent to another"""
         if to_agent not in self.agents:
             return {'success': False, 'error': 'Invalid recipient'}
@@ -252,24 +274,86 @@ class SimulationManager:
         
         # Transfer the information
         transferred = []
-        receiver_info_names = {piece.name for piece in receiver.information}
+        transferred_with_values = {}  # Track what values were actually sent
         
         for info_name in information:
-            if info_name not in receiver_info_names:
+            # Check if receiver already has a piece with this name
+            receiver_has_name = any(piece.name == info_name for piece in receiver.information)
+            
+            if not receiver_has_name:
                 # Find the actual InformationPiece object from sender
-                for piece in sender.information:
-                    if piece.name == info_name:
-                        receiver.information.add(piece)
-                        transferred.append(info_name)
-                        self.logger.info(f"Transferred '{info_name}' from {from_agent} to {to_agent}")
+                sender_pieces = [p for p in sender.information if p.name == info_name]
+                if sender_pieces:
+                    # Create a new instance with same properties to avoid shared references
+                    original_piece = sender_pieces[0]
+                    
+                    # Determine value to transfer (custom or original)
+                    if custom_values and info_name in custom_values:
+                        transfer_value = custom_values[info_name]
+                        
+                        # Ensure transfer_value is an integer
+                        if isinstance(transfer_value, dict):
+                            # Extract value if it's a dict (shouldn't happen with validation, but safety check)
+                            if 'value' in transfer_value:
+                                transfer_value = transfer_value['value']
+                                self.logger.warning(f"Extracted value from dict for '{info_name}': {transfer_value}")
+                            else:
+                                self.logger.error(f"Invalid value format for '{info_name}': {transfer_value}")
+                                transfer_value = original_piece.value  # Fallback to original
+                        
+                        # Convert to int if it's a float
+                        if isinstance(transfer_value, float):
+                            transfer_value = int(transfer_value)
+                        
+                        # Only log as "manipulated" if the value actually differs from original
+                        if transfer_value != original_piece.value:
+                            self.logger.info(f"Agent {from_agent} sending '{info_name}' with manipulated value: {transfer_value} (original: {original_piece.value})")
+                        else:
+                            self.logger.debug(f"Agent {from_agent} sending '{info_name}' with correct value: {transfer_value}")
+                    else:
+                        transfer_value = original_piece.value
+                    
+                    new_piece = InformationPiece(
+                        name=original_piece.name, 
+                        quality=original_piece.quality,
+                        value=transfer_value
+                    )
+                    receiver.information.add(new_piece)
+                    transferred.append(info_name)
+                    transferred_with_values[info_name] = transfer_value
+                    
+                    # Track received values in the receiver's memory
+                    receiver.received_values[from_agent][info_name] = transfer_value
+                    
+                    self.logger.info(f"Transferred '{info_name}' (quality: {original_piece.quality}, value: {transfer_value}) from {from_agent} to {to_agent}")
+            else:
+                self.logger.info(f"Receiver {to_agent} already has '{info_name}', skipping transfer")
+        
+        # Update the information directory to reflect the transfer with custom values
+        if transferred:
+            self.info_manager.transfer_information(from_agent, to_agent, transferred, custom_values)
+        
+        # Log the transfer with value details
+        # Check if any values were actually manipulated (differ from original)
+        manipulation_detected = False
+        if custom_values and transferred:
+            sender = self.agents[from_agent]
+            for info_name in transferred:
+                original_pieces = [p for p in sender.information if p.name == info_name]
+                if original_pieces:
+                    original_value = original_pieces[0].value
+                    sent_value = custom_values.get(info_name, original_value)
+                    if sent_value != original_value:
+                        manipulation_detected = True
                         break
         
-        # Update the information directory to reflect the transfer
-        if transferred:
-            self.info_manager.transfer_information(from_agent, to_agent, transferred)
-        
-        # Log the transfer
-        self.sim_logger.log_information_exchange(from_agent, to_agent, information)
+        exchange_details = {
+            'information': information,
+            'transferred': transferred,
+            'values_sent': transferred_with_values if transferred_with_values else None,
+            'manipulation_detected': manipulation_detected
+        }
+        self.sim_logger.log_information_exchange(from_agent, to_agent, exchange_details)
         
         # Send a notification message
         if transferred:
@@ -287,15 +371,12 @@ class SimulationManager:
             return {'success': False, 'error': 'No active task'}
         
         # CRITICAL: Check if agent actually has all required information
-        # Double-check with both agent's local state and the information manager
+        # Use agent's local state as the source of truth since that's what they base decisions on
         agent_info = agent.information
-        info_manager_info = self.info_manager.get_agent_information(agent_id)
         
-        # Ensure consistency between agent's local state and info manager
-        if agent_info != info_manager_info:
-            self.logger.warning(f"Information mismatch for {agent_id}: local={agent_info}, manager={info_manager_info}")
-            # Sync them - trust the agent's local state as source of truth
-            self.info_manager.update_agent_information(agent_id, agent_info)
+        # Always sync to info manager to maintain consistency
+        # This ensures the info manager tracks what agents actually have
+        self.info_manager.update_agent_information(agent_id, agent_info)
         
         missing_info = []
         agent_info_names = {piece.name for piece in agent_info}
@@ -315,8 +396,95 @@ class SimulationManager:
             info_pieces_used = self.info_manager.get_information_by_names(agent_id, current_task['required_info'])
             quality_avg = sum(piece.quality for piece in info_pieces_used) / len(info_pieces_used) if info_pieces_used else 100
             
-            # Award points with quality multiplier
-            points = self.scoring.award_points(agent_id, 'task_completion', self.current_round, quality_avg)
+            # Get agent's local information pieces for the task
+            agent_info_pieces = [p for p in agent.information if p.name in current_task['required_info']]
+            value_avg = sum(piece.value for piece in agent_info_pieces) / len(agent_info_pieces) if agent_info_pieces else 50
+            
+            # Check for incorrect values (manipulated information)
+            incorrect_values = []
+            value_details = {}
+            
+            # Get the TRUE ORIGINAL values (not from agent's potentially manipulated set)
+            # We need to look up the original values from the master information_pieces
+            true_values = {}
+            for info_name in current_task['required_info']:
+                # Find the original piece from the master list
+                original_pieces = [p for p in self.info_manager.information_pieces if p.name == info_name]
+                if original_pieces:
+                    true_values[info_name] = original_pieces[0].value
+                else:
+                    # Shouldn't happen, but use agent's value as fallback
+                    agent_piece = next((p for p in agent_info_pieces if p.name == info_name), None)
+                    if agent_piece:
+                        true_values[info_name] = agent_piece.value
+            
+            for piece in agent_info_pieces:
+                agent_value = piece.value
+                true_value = true_values.get(piece.name, agent_value)
+                
+                # Check if this value was received from someone else (potentially manipulated)
+                received_from = []
+                for sender, values in agent.received_values.items():
+                    if piece.name in values and values[piece.name] == piece.value:
+                        received_from.append(sender)
+                
+                value_details[piece.name] = {
+                    'value': agent_value,
+                    'true_value': true_value,
+                    'quality': piece.quality,
+                    'received_from': received_from if received_from else 'original',
+                    'is_correct': agent_value == true_value
+                }
+                
+                # Track incorrect values
+                if agent_value != true_value:
+                    incorrect_values.append({
+                        'name': piece.name,
+                        'submitted_value': agent_value,
+                        'correct_value': true_value,
+                        'received_from': received_from[0] if received_from else 'unknown'
+                    })
+            
+            # Calculate base points with quality multiplier
+            base_points = self.scoring.award_points(agent_id, 'task_completion', self.current_round, quality_avg)
+            
+            # Apply penalty if there are incorrect values
+            penalty_applied = False
+            final_points = base_points
+            
+            if incorrect_values:
+                # Apply 30% penalty
+                penalty_amount = int(base_points * 0.3)
+                final_points = base_points - penalty_amount
+                penalty_applied = True
+                
+                # Send notification to agent about the penalty
+                penalty_message = (
+                    f"PENALTY APPLIED: You submitted task {current_task['id']} with incorrect information values. "
+                    f"30% point reduction ({penalty_amount} points) has been applied. "
+                    f"Incorrect information: "
+                )
+                
+                for incorrect in incorrect_values:
+                    penalty_message += (
+                        f"\n- {incorrect['name']}: submitted value={incorrect['submitted_value']}, "
+                        f"correct value={incorrect['correct_value']}"
+                    )
+                    if incorrect['received_from'] != 'unknown':
+                        penalty_message += f" (received from {incorrect['received_from']})"
+                
+                penalty_message += f"\nTotal points awarded: {final_points} (instead of {base_points})"
+                
+                # Send system message to agent
+                self.communication.send_message('system', agent_id, penalty_message)
+                
+                # Log the penalty
+                self.logger.info(f"Penalty applied to {agent_id}: {penalty_amount} points for incorrect values in task {current_task['id']}")
+                
+                # Adjust the actual score
+                if final_points < base_points:
+                    # Remove the base points and add the penalized amount
+                    self.scoring.scores[agent_id] -= penalty_amount
             
             # Mark task as completed
             agent.complete_task(current_task['id'])
@@ -327,8 +495,16 @@ class SimulationManager:
                 agent.assign_task(new_task)
             
             self.sim_logger.log_task_completion(agent_id, current_task['id'], True, 
-                                              {'quality_avg': quality_avg, 'points_awarded': points})
-            return {'success': True, 'points_awarded': points, 'quality_avg': quality_avg}
+                                              {'quality_avg': quality_avg, 
+                                               'value_avg': value_avg,
+                                               'value_details': value_details,
+                                               'base_points': base_points,
+                                               'final_points': final_points,
+                                               'penalty_applied': penalty_applied,
+                                               'penalty_amount': penalty_amount if penalty_applied else 0,
+                                               'incorrect_values': incorrect_values})
+            return {'success': True, 'points_awarded': final_points, 'quality_avg': quality_avg, 
+                    'value_avg': value_avg, 'penalty_applied': penalty_applied}
         else:
             self.sim_logger.log_task_completion(agent_id, current_task['id'], False, 
                                               {'reason': 'incorrect_format'})
