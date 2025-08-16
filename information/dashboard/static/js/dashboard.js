@@ -110,12 +110,53 @@ async function loadSimulations() {
         const select = document.getElementById('simulationSelect');
         select.innerHTML = '<option value="">Select a simulation...</option>';
         
-        simulations.forEach(sim => {
-            const option = document.createElement('option');
-            option.value = sim.id;
-            option.textContent = `${sim.id} (${sim.agents} agents, ${sim.rounds} rounds)`;
-            select.appendChild(option);
-        });
+        // Group simulations by type
+        const standalone = simulations.filter(sim => sim.type === 'standalone');
+        const batch = simulations.filter(sim => sim.type === 'batch');
+        
+        // Add standalone simulations
+        if (standalone.length > 0) {
+            const standaloneGroup = document.createElement('optgroup');
+            standaloneGroup.label = 'Standalone Simulations';
+            
+            standalone.forEach(sim => {
+                const option = document.createElement('option');
+                option.value = sim.id;
+                option.textContent = `${sim.id} (${sim.agents} agents, ${sim.rounds} rounds)`;
+                standaloneGroup.appendChild(option);
+            });
+            
+            select.appendChild(standaloneGroup);
+        }
+        
+        // Add batch simulations
+        if (batch.length > 0) {
+            const batchGroup = document.createElement('optgroup');
+            batchGroup.label = 'Batch Simulations';
+            
+            // Group batch simulations by batch_id
+            const batchesByBatchId = {};
+            batch.forEach(sim => {
+                if (!batchesByBatchId[sim.batch_id]) {
+                    batchesByBatchId[sim.batch_id] = [];
+                }
+                batchesByBatchId[sim.batch_id].push(sim);
+            });
+            
+            // Add batch simulations grouped by batch
+            Object.keys(batchesByBatchId).sort().reverse().forEach(batchId => {
+                batchesByBatchId[batchId].forEach(sim => {
+                    const option = document.createElement('option');
+                    option.value = sim.id;
+                    // Use display_name if available, otherwise construct it
+                    const displayText = sim.display_name || `${sim.id} (${sim.agents} agents, ${sim.rounds} rounds)`;
+                    option.textContent = displayText;
+                    batchGroup.appendChild(option);
+                });
+            });
+            
+            select.appendChild(batchGroup);
+        }
     } catch (error) {
         console.error('Failed to load simulations:', error);
     }
@@ -127,8 +168,8 @@ async function loadSimulation(simId) {
         // Show loading indicator
         showLoading(true);
         
-        // Fetch simulation data
-        const response = await fetch(`/api/simulation/${simId}/summary`);
+        // Fetch simulation data - properly encode the path for batch simulations
+        const response = await fetch(`/api/simulation/${encodeURIComponent(simId)}/summary`);
         simulationData = await response.json();
         
         currentSimulation = simId;
@@ -285,7 +326,7 @@ function updateAgentLegend() {
 // Load round data
 async function loadRoundData(roundNum) {
     try {
-        const response = await fetch(`/api/simulation/${currentSimulation}/rounds/${roundNum}`);
+        const response = await fetch(`/api/simulation/${encodeURIComponent(currentSimulation)}/rounds/${roundNum}`);
         const roundEvents = await response.json();
         
         displayRoundTimeline(roundEvents);

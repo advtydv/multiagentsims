@@ -11,9 +11,10 @@ from dataclasses import dataclass
 
 @dataclass
 class InformationPiece:
-    """Represents a piece of information with quality"""
+    """Represents a piece of information with quality and value"""
     name: str
     quality: int  # 0-100 quality score
+    value: int  # 0-100 value score (can be manipulated during transfer)
     
     def __str__(self):
         return self.name
@@ -22,9 +23,28 @@ class InformationPiece:
         return self.name
     
     def __hash__(self):
+        # Only hash the name for consistency with equality comparisons
+        # This allows InformationPiece to be used in sets/dicts properly
         return hash(self.name)
     
     def __eq__(self, other):
+        if isinstance(other, InformationPiece):
+            # Two pieces are equal if they have the same name
+            # Quality is a property of the piece but doesn't define equality
+            return self.name == other.name
+        elif isinstance(other, str):
+            # Allow string comparison for convenience (checks name only)
+            return self.name == other
+        return False
+    
+    def is_identical_to(self, other):
+        """Check if two pieces are identical (same name, quality, AND value)"""
+        if isinstance(other, InformationPiece):
+            return self.name == other.name and self.quality == other.quality and self.value == other.value
+        return False
+    
+    def same_name_as(self, other):
+        """Check if two pieces have the same name (ignoring quality)"""
         if isinstance(other, InformationPiece):
             return self.name == other.name
         elif isinstance(other, str):
@@ -55,7 +75,7 @@ class InformationManager:
         self.agent_information = defaultdict(set)
         
     def _generate_information_pieces(self) -> List[InformationPiece]:
-        """Generate all information pieces based on templates with quality"""
+        """Generate all information pieces based on templates with quality and value"""
         pieces = []
         templates = self.config['info_templates']
         
@@ -75,7 +95,19 @@ class InformationManager:
             else:  # 20% high quality
                 quality = random.randint(80, 100)
             
-            piece = InformationPiece(name=name, quality=quality)
+            # Generate value with similar distribution to quality
+            # This represents the "true" value that agents initially receive
+            rand_value = random.random()
+            if rand_value < 0.05:  # 5% poor value
+                value = random.randint(0, 19)
+            elif rand_value < 0.20:  # 15% low value
+                value = random.randint(20, 59)
+            elif rand_value < 0.80:  # 60% decent value
+                value = random.randint(60, 79)
+            else:  # 20% high value
+                value = random.randint(80, 100)
+            
+            piece = InformationPiece(name=name, quality=quality, value=value)
             pieces.append(piece)
             
         return pieces
@@ -85,19 +117,30 @@ class InformationManager:
         distribution = [[] for _ in range(num_agents)]
         
         # Ensure each piece is assigned to at least one agent
+        # Create new InformationPiece objects to avoid shared references
         for i, piece in enumerate(self.information_pieces):
             agent_idx = i % num_agents
-            distribution[agent_idx].append(piece)
+            # Create a new InformationPiece with same name, quality, and value
+            new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
+            distribution[agent_idx].append(new_piece)
             
-        # Fill remaining slots randomly
-        all_pieces = self.information_pieces * 2  # Create duplicates for distribution
-        random.shuffle(all_pieces)
+        # Create a pool of pieces for additional distribution
+        # Each agent can potentially get any piece (with same quality and value as original)
+        piece_pool = []
+        for _ in range(2):  # Create 2x the pieces for distribution
+            for piece in self.information_pieces:
+                # Create new instances with same properties
+                new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
+                piece_pool.append(new_piece)
+        random.shuffle(piece_pool)
         
         for i in range(num_agents):
-            while len(distribution[i]) < self.pieces_per_agent:
-                piece = all_pieces.pop()
-                if piece not in distribution[i]:
-                    distribution[i].append(piece)
+            while len(distribution[i]) < self.pieces_per_agent and piece_pool:
+                candidate_piece = piece_pool.pop()
+                # Check if agent already has a piece with the same name
+                has_same_name = any(p.same_name_as(candidate_piece) for p in distribution[i])
+                if not has_same_name:
+                    distribution[i].append(candidate_piece)
                     
         # Update tracking
         for i in range(num_agents):
@@ -121,18 +164,39 @@ class InformationManager:
         """Update the information held by a specific agent"""
         self.agent_information[agent_id] = new_info
     
-    def transfer_information(self, from_agent: str, to_agent: str, info_pieces: List[str]):
-        """Update the directory when information is transferred between agents"""
+    def transfer_information(self, from_agent: str, to_agent: str, info_pieces: List[str], 
+                           custom_values: Dict[str, int] = None):
+        """Update the directory when information is transferred between agents
+        
+        Args:
+            from_agent: Sender agent ID
+            to_agent: Receiver agent ID
+            info_pieces: List of information piece names to transfer
+            custom_values: Optional dict mapping piece names to custom values (for manipulation)
+        """
         # Find the actual InformationPiece objects with their quality
         from_agent_info = self.agent_information[from_agent]
         
         for piece_name in info_pieces:
             # Find the piece with matching name from sender's information
-            for info_piece in from_agent_info:
-                if info_piece.name == piece_name:
-                    # Transfer the piece with its quality preserved
-                    self.agent_information[to_agent].add(info_piece)
-                    break
+            matching_pieces = [p for p in from_agent_info if p.name == piece_name]
+            if matching_pieces:
+                # Transfer the first matching piece (there should only be one per name per agent)
+                # Create a new instance to avoid shared references
+                original_piece = matching_pieces[0]
+                
+                # Use custom value if provided, otherwise use original value
+                if custom_values and piece_name in custom_values:
+                    transfer_value = custom_values[piece_name]
+                else:
+                    transfer_value = original_piece.value
+                
+                new_piece = InformationPiece(
+                    name=original_piece.name, 
+                    quality=original_piece.quality,
+                    value=transfer_value
+                )
+                self.agent_information[to_agent].add(new_piece)
         # Note: We don't remove from sender as they still have the information
     
     def get_information_by_names(self, agent_id: str, info_names: List[str]) -> List[InformationPiece]:
@@ -200,14 +264,21 @@ class TaskManager:
         # In a more complex version, this could involve actual calculations
         
         if isinstance(submitted_answer, str):
+            # Normalize strings for comparison (case-insensitive, trimmed)
+            normalized_answer = submitted_answer.lower().strip()
+            
             # Check if all required information pieces are mentioned in the answer
             for info in task['required_info']:
-                if info not in submitted_answer:
+                # Normalize the required info piece for comparison
+                normalized_info = info.lower().strip()
+                if normalized_info not in normalized_answer:
                     return False
             return True
         elif isinstance(submitted_answer, list):
-            # Check if submitted list matches required info
-            return set(submitted_answer) == set(task['required_info'])
+            # Check if submitted list matches required info (case-insensitive)
+            normalized_submitted = {item.lower().strip() for item in submitted_answer}
+            normalized_required = {item.lower().strip() for item in task['required_info']}
+            return normalized_submitted == normalized_required
         else:
             # For now, just compare directly
             return submitted_answer == task['expected_answer']

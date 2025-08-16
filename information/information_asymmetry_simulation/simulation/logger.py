@@ -34,8 +34,11 @@ class SimulationLogger:
         # Create a single comprehensive log file
         self.comprehensive_log = self.log_dir / 'simulation_log.jsonl'
         
-        # Open file handle
-        self.log_file = open(self.comprehensive_log, 'w')
+        # Open file handle with proper exception handling
+        try:
+            self.log_file = open(self.comprehensive_log, 'w')
+        except Exception as e:
+            raise RuntimeError(f"Failed to open log file {self.comprehensive_log}: {e}")
         
     def log_event(self, event_type: str, data: Dict[str, Any]):
         """Log a generic event"""
@@ -170,10 +173,21 @@ class SimulationLogger:
         
     def close(self):
         """Close all log files"""
-        self.log_file.close()
+        if hasattr(self, 'log_file') and self.log_file:
+            try:
+                self.log_file.flush()
+                self.log_file.close()
+            except Exception:
+                pass  # Best effort close
         
     def __enter__(self):
         return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Ensure file is closed even on exception"""
+        self.close()
+        return False  # Don't suppress exceptions
+    
+    def __del__(self):
+        """Destructor to ensure file is closed"""
         self.close()

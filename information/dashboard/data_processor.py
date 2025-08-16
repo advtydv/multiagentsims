@@ -28,8 +28,8 @@ def process_simulation_data(events: List[Dict[str, Any]]) -> Dict[str, Any]:
         'final_results': get_final_results(events),
         'rounds': group_events_by_round(events),
         'statistics': calculate_statistics(events),
-        'scores_over_time': get_agent_scores_over_time(events),
-        'rankings_over_time': get_agent_rankings_over_time(events),
+        'revenue_over_time': get_agent_revenue_over_time(events),
+        'revenue_board_over_time': get_agent_revenue_board_over_time(events),
         'performance_metrics': calculate_performance_metrics(events),
         'communication_metrics': calculate_communication_metrics(events),
         'strategic_analysis': analyze_agent_strategies(events),
@@ -132,9 +132,9 @@ def create_activity_timeline(events: List[Dict[str, Any]]) -> List[Dict[str, Any
     
     return timeline
 
-def get_agent_rankings_over_time(events: List[Dict[str, Any]]) -> Dict[int, List[Tuple[str, int]]]:
-    rankings = {}
-    agent_scores = defaultdict(int)
+def get_agent_revenue_board_over_time(events: List[Dict[str, Any]]) -> Dict[int, List[Tuple[str, int]]]:
+    revenue_board = {}
+    agent_revenues = defaultdict(int)
     
     # Process events chronologically
     for event in events:
@@ -142,24 +142,24 @@ def get_agent_rankings_over_time(events: List[Dict[str, Any]]) -> Dict[int, List
         if 'data' in event and 'round' in event['data']:
             round_num = event['data']['round']
         
-        # Update scores on task completion
+        # Update revenues on task completion
         if event['event_type'] == 'task_completion' and event['data']['success']:
             agent_id = event['data']['agent_id']
             details = event['data'].get('details', {})
-            points = details.get('points_awarded', 0)
-            agent_scores[agent_id] += points
+            revenue = details.get('final_revenue', details.get('revenue_earned', details.get('points_awarded', 0)))  # Fallback for compatibility
+            agent_revenues[agent_id] += revenue
             
-            # Update rankings for this round
-            current_rankings = sorted(agent_scores.items(), key=lambda x: x[1], reverse=True)
-            rankings[round_num] = [(agent, score) for agent, score in current_rankings]
+            # Update revenue board for this round
+            current_revenue_board = sorted(agent_revenues.items(), key=lambda x: x[1], reverse=True)
+            revenue_board[round_num] = [(agent, revenue) for agent, revenue in current_revenue_board]
     
-    return rankings
+    return revenue_board
 
-def get_agent_scores_over_time(events: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    """Get score progression for each agent over all rounds."""
+def get_agent_revenue_over_time(events: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Get revenue progression for each agent over all rounds."""
     # Initialize tracking
-    agent_scores = defaultdict(int)
-    scores_by_round = defaultdict(lambda: defaultdict(int))
+    agent_revenues = defaultdict(int)
+    revenue_by_round = defaultdict(lambda: defaultdict(int))
     
     # Get max rounds from config
     max_rounds = 20
@@ -176,7 +176,7 @@ def get_agent_scores_over_time(events: List[Dict[str, Any]]) -> Dict[str, List[D
             agent_ids = {f'agent_{i}' for i in range(1, num_agents + 1)}
             break
     
-    # Track scores round by round
+    # Track revenues round by round
     current_round = 1
     for event in events:
         # Update round if specified
@@ -186,24 +186,24 @@ def get_agent_scores_over_time(events: List[Dict[str, Any]]) -> Dict[str, List[D
                 # Save scores for previous rounds
                 for r in range(current_round, new_round):
                     for agent in agent_ids:
-                        scores_by_round[r][agent] = agent_scores[agent]
+                        revenue_by_round[r][agent] = agent_revenues[agent]
                 current_round = new_round
         
-        # Update scores on task completion
+        # Update revenues on task completion
         if event['event_type'] == 'task_completion' and event['data']['success']:
             agent_id = event['data']['agent_id']
             details = event['data'].get('details', {})
-            points = details.get('points_awarded', 0)
-            agent_scores[agent_id] += points
+            revenue = details.get('final_revenue', details.get('revenue_earned', details.get('points_awarded', 0)))  # Fallback for compatibility
+            agent_revenues[agent_id] += revenue
             
-            # Update score for current round
+            # Update revenue for current round
             for agent in agent_ids:
-                scores_by_round[current_round][agent] = agent_scores[agent]
+                revenue_by_round[current_round][agent] = agent_revenues[agent]
     
     # Fill in remaining rounds
     for r in range(current_round + 1, max_rounds + 1):
         for agent in agent_ids:
-            scores_by_round[r][agent] = agent_scores[agent]
+            revenue_by_round[r][agent] = agent_revenues[agent]
     
     # Convert to format suitable for Chart.js
     result = {}
@@ -212,7 +212,7 @@ def get_agent_scores_over_time(events: List[Dict[str, Any]]) -> Dict[str, List[D
         for round_num in range(1, max_rounds + 1):
             result[agent].append({
                 'round': round_num,
-                'score': scores_by_round[round_num][agent]
+                'revenue': revenue_by_round[round_num][agent]
             })
     
     return result

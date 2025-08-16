@@ -12,7 +12,7 @@ import random
 from .agent import Agent
 from .tasks import TaskManager, InformationManager, InformationPiece
 from .communication import CommunicationSystem
-from .scoring import ScoringSystem
+from .scoring import RevenueSystem
 from .logger import SimulationLogger
 
 
@@ -26,7 +26,7 @@ class SimulationManager:
         
         # Initialize components
         self.communication = CommunicationSystem(sim_logger)
-        self.scoring = ScoringSystem(config['scoring'])
+        self.revenue_system = RevenueSystem(config['revenue'])
         self.info_manager = InformationManager(config['information'])
         self.task_manager = TaskManager(config['tasks'], self.info_manager)
         
@@ -46,19 +46,35 @@ class SimulationManager:
         agents = {}
         num_agents = self.config['simulation']['agents']
         
+        # Determine agent types
+        uncooperative_count = self.config['agents'].get('uncooperative_count', 0)
+        if uncooperative_count > num_agents:
+            self.logger.warning(f"uncooperative_count ({uncooperative_count}) exceeds total agents ({num_agents}), capping at {num_agents}")
+            uncooperative_count = num_agents
+        
+        # Randomly select which agents will be uncooperative
+        uncooperative_indices = set(random.sample(range(num_agents), uncooperative_count))
+        
         # Distribute information among agents
         info_distribution = self.info_manager.distribute_information(num_agents)
         
         for i in range(num_agents):
             agent_id = f"agent_{i+1}"
+            agent_type = "uncooperative" if i in uncooperative_indices else "neutral"
+            
+            # Log agent type assignment
+            self.logger.info(f"Initializing {agent_id} as {agent_type} agent")
+            
             agent = Agent(
                 agent_id=agent_id,
                 config=self.config['agents'],
                 initial_info=info_distribution[i],
                 communication_system=self.communication,
-                scoring_system=self.scoring,
+                revenue_system=self.revenue_system,
                 all_info_pieces=self.info_manager.information_pieces,  # Pass it during initialization
-                simulation_config=self.config['simulation']  # Pass simulation config for rankings visibility
+                simulation_config=self.config['simulation'],  # Pass simulation config for rankings visibility
+                agent_type=agent_type,  # Pass agent type
+                communication_config=self.config.get('communication', {})  # Pass communication config for action limits
             )
             agents[agent_id] = agent
             
@@ -72,7 +88,12 @@ class SimulationManager:
     def run(self) -> Dict[str, Any]:
         """Run the complete simulation"""
         self.logger.info("Starting simulation...")
-        self.sim_logger.log_simulation_start(self.config)
+        
+        # Include agent types in simulation start log
+        agent_types = {agent_id: agent.agent_type for agent_id, agent in self.agents.items()}
+        config_with_types = self.config.copy()
+        config_with_types['agent_types'] = agent_types
+        self.sim_logger.log_simulation_start(config_with_types)
         
         results = {
             'start_time': datetime.now().isoformat(),
@@ -92,7 +113,7 @@ class SimulationManager:
         
         # Calculate final results
         results['end_time'] = datetime.now().isoformat()
-        results['final_rankings'] = self.scoring.get_rankings()
+        results['final_revenue_board'] = self.revenue_system.get_revenue_board()
         results['total_rounds'] = self.total_rounds
         results['total_tasks_completed'] = sum(r['tasks_completed'] for r in results['rounds'])
         results['total_messages'] = self.communication.get_total_messages()
@@ -132,6 +153,12 @@ class SimulationManager:
             actions = agent.take_turn(current_state, self.current_round)
             
             if actions:
+                # Enforce action limit if configured
+                max_actions = self.config.get('communication', {}).get('max_actions_per_turn', -1)
+                if max_actions > 0 and len(actions) > max_actions:
+                    self.logger.warning(f"Agent {agent_id} tried to take {len(actions)} actions, limiting to {max_actions}")
+                    actions = actions[:max_actions]  # Truncate to max allowed
+                
                 round_results['agent_actions'][agent_id] = actions
                 
                 # Extract overall private thoughts if available
@@ -196,7 +223,7 @@ class SimulationManager:
         return {
             'information_directory': self.info_manager.get_directory(),
             'public_messages': self.communication.get_public_messages(),
-            'rankings': self.scoring.get_rankings()
+            'revenue_board': self.revenue_system.get_revenue_board()
         }
     
     def _process_action(self, agent_id: str, action: Dict[str, Any]) -> Dict[str, Any]:
@@ -446,22 +473,24 @@ class SimulationManager:
                     })
             
             # Calculate base points with quality multiplier
-            base_points = self.scoring.award_points(agent_id, 'task_completion', self.current_round, quality_avg)
+            base_revenue = self.revenue_system.award_revenue(agent_id, 'task_completion', self.current_round, quality_avg)
             
             # Apply penalty if there are incorrect values
             penalty_applied = False
-            final_points = base_points
+            final_revenue = base_revenue
             
             if incorrect_values:
-                # Apply 30% penalty
-                penalty_amount = int(base_points * 0.3)
-                final_points = base_points - penalty_amount
+                # Apply penalty based on configuration
+                penalty_rate = self.config['revenue'].get('incorrect_value_penalty', 0.3)
+                penalty_amount = int(base_revenue * penalty_rate)
+                final_revenue = base_revenue - penalty_amount
                 penalty_applied = True
                 
                 # Send notification to agent about the penalty
+                penalty_percentage = int(penalty_rate * 100)
                 penalty_message = (
                     f"PENALTY APPLIED: You submitted task {current_task['id']} with incorrect information values. "
-                    f"30% point reduction ({penalty_amount} points) has been applied. "
+                    f"{penalty_percentage}% point reduction ({penalty_amount} points) has been applied. "
                     f"Incorrect information: "
                 )
                 
@@ -473,7 +502,7 @@ class SimulationManager:
                     if incorrect['received_from'] != 'unknown':
                         penalty_message += f" (received from {incorrect['received_from']})"
                 
-                penalty_message += f"\nTotal points awarded: {final_points} (instead of {base_points})"
+                penalty_message += f"\nTotal points awarded: {final_revenue} (instead of {base_revenue})"
                 
                 # Send system message to agent
                 self.communication.send_message('system', agent_id, penalty_message)
@@ -482,9 +511,9 @@ class SimulationManager:
                 self.logger.info(f"Penalty applied to {agent_id}: {penalty_amount} points for incorrect values in task {current_task['id']}")
                 
                 # Adjust the actual score
-                if final_points < base_points:
+                if final_revenue < base_revenue:
                     # Remove the base points and add the penalized amount
-                    self.scoring.scores[agent_id] -= penalty_amount
+                    self.revenue_system.revenue[agent_id] -= penalty_amount
             
             # Mark task as completed
             agent.complete_task(current_task['id'])
@@ -498,12 +527,12 @@ class SimulationManager:
                                               {'quality_avg': quality_avg, 
                                                'value_avg': value_avg,
                                                'value_details': value_details,
-                                               'base_points': base_points,
-                                               'final_points': final_points,
+                                               'base_revenue': base_revenue,
+                                               'final_revenue': final_revenue,
                                                'penalty_applied': penalty_applied,
                                                'penalty_amount': penalty_amount if penalty_applied else 0,
                                                'incorrect_values': incorrect_values})
-            return {'success': True, 'points_awarded': final_points, 'quality_avg': quality_avg, 
+            return {'success': True, 'revenue_earned': final_revenue, 'quality_avg': quality_avg, 
                     'value_avg': value_avg, 'penalty_applied': penalty_applied}
         else:
             self.sim_logger.log_task_completion(agent_id, current_task['id'], False, 
@@ -518,10 +547,10 @@ class SimulationManager:
         if 'reports_submitted' in round_results and round_results['reports_submitted'] > 0:
             self.logger.info(f"  - Strategic reports collected: {round_results['reports_submitted']}")
         
-        rankings = self.scoring.get_rankings()
-        self.logger.info("  - Current rankings:")
-        for i, (agent_id, score) in enumerate(rankings.items(), 1):
-            self.logger.info(f"    {i}. {agent_id}: {score} points")
+        revenue_board = self.revenue_system.get_revenue_board()
+        self.logger.info("  - Current revenue board:")
+        for i, (agent_id, revenue) in enumerate(revenue_board.items(), 1):
+            self.logger.info(f"    {i}. {agent_id}: ${revenue:,}")
     
     def _aggregate_cooperation_scores(self, collected_reports: Dict[str, Dict[str, Any]]):
         """Aggregate cooperation scores from all agent reports"""

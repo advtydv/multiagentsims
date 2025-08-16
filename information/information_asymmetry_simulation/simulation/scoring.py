@@ -1,77 +1,75 @@
 """
-Scoring system for the simulation
+Revenue tracking system for the simulation
 """
 
 from typing import Dict, List, Any
 from collections import defaultdict
 
 
-class ScoringSystem:
-    """Manages agent scores and rankings"""
+class RevenueSystem:
+    """Manages agent revenue and revenue board"""
     
     def __init__(self, config: dict):
         self.config = config
-        self.scores = defaultdict(int)
+        self.revenue = defaultdict(int)  # Track revenue in dollars
         self.task_completions = defaultdict(list)
         self.round_completions = defaultdict(lambda: defaultdict(int))
         
-    def award_points(self, agent_id: str, action_type: str, round_num: int = None, quality_avg: float = None) -> int:
-        """Award points to an agent for an action"""
-        points = 0
+    def award_revenue(self, agent_id: str, action_type: str, round_num: int = None, quality_avg: float = None) -> int:
+        """Award revenue to an agent for an action"""
+        revenue_earned = 0
         
         if action_type == 'task_completion':
-            base_points = self.config['task_completion']
+            base_revenue = self.config['task_completion']
             
             # Apply quality multiplier if provided
             if quality_avg is not None:
-                points = int(base_points * (quality_avg / 100))
+                revenue_earned = int(base_revenue * (quality_avg / 100))
             else:
-                points = base_points
+                revenue_earned = base_revenue
             
             # Check if agent is first to complete a task this round
             if round_num and self.round_completions[round_num]['total'] == 0:
                 bonus = self.config.get('bonus_for_first', 0)
-                # Apply quality multiplier to bonus as well
-                if quality_avg is not None:
-                    bonus = int(bonus * (quality_avg / 100))
-                points += bonus
+                # Don't apply quality multiplier to bonus - it's a fixed reward for being first
+                revenue_earned += bonus
                 
             if round_num:
                 self.round_completions[round_num]['total'] += 1
                 self.round_completions[round_num][agent_id] += 1
                 
-        self.scores[agent_id] += points
+        self.revenue[agent_id] += revenue_earned
         self.task_completions[agent_id].append({
-            'points': points,
+            'revenue': revenue_earned,
             'action': action_type,
             'round': round_num,
             'quality_avg': quality_avg
         })
         
-        return points
+        return revenue_earned
         
-    def get_score(self, agent_id: str) -> int:
-        """Get current score for an agent"""
-        return self.scores[agent_id]
+    def get_revenue(self, agent_id: str) -> int:
+        """Get current revenue for an agent"""
+        return self.revenue[agent_id]
         
-    def get_rankings(self) -> Dict[str, int]:
-        """Get current rankings (sorted by score)"""
-        # Sort agents by score (descending)
-        sorted_agents = sorted(self.scores.items(), key=lambda x: x[1], reverse=True)
+    def get_revenue_board(self) -> Dict[str, int]:
+        """Get current revenue board (sorted by revenue)"""
+        # Sort agents by revenue (descending)
+        sorted_agents = sorted(self.revenue.items(), key=lambda x: x[1], reverse=True)
         
         # Return as ordered dict
         return dict(sorted_agents)
         
-    def get_leaderboard(self) -> List[Dict[str, Any]]:
-        """Get detailed leaderboard information"""
-        rankings = self.get_rankings()
+    def get_revenue_leaderboard(self) -> List[Dict[str, Any]]:
+        """Get detailed revenue leaderboard information"""
+        revenue_board = self.get_revenue_board()
         leaderboard = []
         
-        for rank, (agent_id, score) in enumerate(rankings.items(), 1):
+        for position, (agent_id, revenue) in enumerate(revenue_board.items(), 1):
             leaderboard.append({
-                'rank': rank,
+                'position': position,
                 'agent_id': agent_id,
-                'score': score,
+                'revenue': revenue,
                 'tasks_completed': len(self.task_completions[agent_id])
             })
             
@@ -79,14 +77,14 @@ class ScoringSystem:
         
     def get_agent_stats(self, agent_id: str) -> Dict[str, Any]:
         """Get detailed statistics for a specific agent"""
-        rankings = self.get_rankings()
-        agent_rank = list(rankings.keys()).index(agent_id) + 1 if agent_id in rankings else None
+        revenue_board = self.get_revenue_board()
+        agent_position = list(revenue_board.keys()).index(agent_id) + 1 if agent_id in revenue_board else None
         
         return {
             'agent_id': agent_id,
-            'score': self.scores[agent_id],
-            'rank': agent_rank,
-            'total_agents': len(rankings),
+            'revenue': self.revenue[agent_id],
+            'position': agent_position,
+            'total_agents': len(revenue_board),
             'tasks_completed': len(self.task_completions[agent_id]),
             'completion_history': self.task_completions[agent_id]
         }
@@ -104,8 +102,8 @@ class ScoringSystem:
             }
         }
         
-    def reset_scores(self):
-        """Reset all scores (useful for testing)"""
-        self.scores.clear()
+    def reset_revenue(self):
+        """Reset all revenue (useful for testing)"""
+        self.revenue.clear()
         self.task_completions.clear()
         self.round_completions.clear()

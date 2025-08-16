@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Simulation Analysis Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="batch-mode">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-collection"></i> Batch Analysis Dashboard
+            </a>
+            <div class="navbar-nav ms-auto">
+                <select id="batchSelect" class="form-select" style="width: 400px;">
+                    <option value="">Select a batch simulation...</option>
+                </select>
+                <a href="/" class="btn btn-light ms-2">
+                    <i class="bi bi-arrow-left"></i> Single Simulation View
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div id="batchInfo" class="alert alert-primary d-none">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Batch ID:</strong> <span id="batchId"></span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Simulations:</strong> <span id="numSimulations"></span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Agents per Sim:</strong> <span id="agentsPerSim"></span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Rounds per Sim:</strong> <span id="roundsPerSim"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="mainContent" class="d-none">
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button">
+                        <i class="bi bi-speedometer2"></i> Overview
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="agents-tab" data-bs-toggle="tab" data-bs-target="#agents" type="button">
+                        <i class="bi bi-people"></i> Agent Analysis
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="consistency-tab" data-bs-toggle="tab" data-bs-target="#consistency" type="button">
+                        <i class="bi bi-bar-chart"></i> Consistency
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="progression-tab" data-bs-toggle="tab" data-bs-target="#progression" type="button">
+                        <i class="bi bi-graph-up"></i> Round Progression
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab content -->
+            <div class="tab-content" id="mainTabContent">
+                <!-- Overview Tab -->
+                <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Key Metrics Summary -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Aggregate Performance Metrics</h4>
+                                <p class="text-muted">Mean values with 95% confidence intervals across all simulations</p>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Avg Tasks/Agent</h5>
+                                        <h2 class="text-primary" id="avgTasksPerAgent">-</h2>
+                                        <small class="text-muted" id="avgTasksCI">-</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Avg Points/Agent</h5>
+                                        <h2 class="text-success" id="avgPointsPerAgent">-</h2>
+                                        <small class="text-muted" id="avgPointsCI">-</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h5 class="card-title">Cooperation Index</h5>
+                                        <h2 class="text-info" id="cooperationIndex">-</h2>
+                                        <small class="text-muted" id="cooperationCI">-</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h5 class="card-title">System Efficiency</h5>
+                                        <h2 class="text-warning" id="systemEfficiency">-</h2>
+                                        <small class="text-muted" id="efficiencyCI">-</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Distribution Charts -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Score Distribution</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="scoreDistributionChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Task Completion Distribution</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="taskDistributionChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Analysis -->
+                <div class="tab-pane fade" id="performance" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Agent Performance Comparison -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Agent Performance Comparison</h4>
+                                <p class="text-muted">Mean performance metrics with standard deviation</p>
+                            </div>
+                            <div class="col-12">
+                                <canvas id="agentPerformanceChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Performance Consistency -->
+                        <div class="row mb-4">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Performance Consistency</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-striped" id="performanceConsistencyTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>Agent</th>
+                                                    <th>Mean Score</th>
+                                                    <th>Std Dev</th>
+                                                    <th>CV %</th>
+                                                    <th>Min</th>
+                                                    <th>Max</th>
+                                                    <th>Range</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="performanceConsistencyBody">
+                                                <!-- Data will be populated here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Consistency Insights</h5>
+                                    </div>
+                                    <div class="card-body" id="consistencyInsights">
+                                        <!-- Insights will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Score Trajectories -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h4>Score Trajectories Across Rounds</h4>
+                                <p class="text-muted">Average score progression with confidence bands</p>
+                                <canvas id="scoreTrajectoryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ranking Distributions -->
+                <div class="tab-pane fade" id="rankings" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Ranking Probability Matrix -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Ranking Probability Matrix</h4>
+                                <p class="text-muted">Probability of each agent achieving each rank position</p>
+                            </div>
+                            <div class="col-md-8">
+                                <canvas id="rankingHeatmap"></canvas>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Dominant Rankings</h5>
+                                    </div>
+                                    <div class="card-body" id="dominantRankings">
+                                        <!-- Most frequent rankings will be shown here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rank Stability Analysis -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Average Final Rank</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="avgRankChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Rank Volatility</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="rankVolatilityChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cooperation Patterns -->
+                <div class="tab-pane fade" id="cooperation" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Cooperation Metrics Summary -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Aggregate Cooperation Analysis</h4>
+                            </div>
+                            <div class="col-md-6">
+                                <canvas id="cooperationDistributionChart"></canvas>
+                            </div>
+                            <div class="col-md-6">
+                                <canvas id="cooperationPerformanceCorrelation"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Cooperation Consistency -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Cooperation Score Consistency</h4>
+                                <table class="table table-striped" id="cooperationConsistencyTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Agent</th>
+                                            <th>Mean Given</th>
+                                            <th>Std Dev</th>
+                                            <th>Mean Received</th>
+                                            <th>Std Dev</th>
+                                            <th>Reciprocity</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cooperationConsistencyBody">
+                                        <!-- Data will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Network Formation Rates -->
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Alliance Formation Frequency</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="allianceFormationChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Cooperation Insights</h5>
+                                    </div>
+                                    <div class="card-body" id="batchCooperationInsights">
+                                        <!-- Insights will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategy Effectiveness -->
+                <div class="tab-pane fade" id="strategies" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Strategy Metrics -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Strategy Effectiveness Analysis</h4>
+                                <p class="text-muted">Average performance of different strategic approaches</p>
+                            </div>
+                        </div>
+
+                        <!-- Information Sharing Strategies -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Information Sharing Patterns</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="infoSharingPatternsChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Strategy Performance</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="strategyPerformanceChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Communication Patterns -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h4>Communication Strategy Analysis</h4>
+                                <div id="communicationStrategyAnalysis">
+                                    <!-- Analysis will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Variance Analysis -->
+                <div class="tab-pane fade" id="variance" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Outcome Variance -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Outcome Variance Analysis</h4>
+                                <p class="text-muted">Understanding the variability in simulation outcomes</p>
+                            </div>
+                            <div class="col-md-6">
+                                <canvas id="outcomeVarianceChart"></canvas>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Variance Insights</h5>
+                                    </div>
+                                    <div class="card-body" id="varianceInsights">
+                                        <!-- Insights will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Simulation Clustering -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Simulation Outcome Clustering</h4>
+                                <p class="text-muted">Identifying patterns in simulation outcomes</p>
+                            </div>
+                            <div class="col-12">
+                                <canvas id="simulationClusteringChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Outlier Analysis -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h4>Outlier Simulations</h4>
+                                <div id="outlierAnalysis">
+                                    <!-- Outlier analysis will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistical Significance -->
+                <div class="tab-pane fade" id="significance" role="tabpanel">
+                    <div class="mt-3">
+                        <!-- Statistical Tests Results -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Statistical Significance Testing</h4>
+                                <p class="text-muted">Testing hypotheses about agent performance and strategies</p>
+                            </div>
+                        </div>
+
+                        <!-- Performance Differences -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Agent Performance ANOVA</h5>
+                                    </div>
+                                    <div class="card-body" id="performanceANOVA">
+                                        <!-- ANOVA results will be shown here -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>Pairwise Comparisons</h5>
+                                    </div>
+                                    <div class="card-body" id="pairwiseComparisons">
+                                        <!-- Pairwise comparison results will be shown here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Correlation Tests -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h4>Correlation Analysis</h4>
+                                <table class="table table-striped" id="correlationTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Variable 1</th>
+                                            <th>Variable 2</th>
+                                            <th>Correlation (r)</th>
+                                            <th>p-value</th>
+                                            <th>Significance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="correlationBody">
+                                        <!-- Correlation results will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Effect Sizes -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h4>Effect Size Analysis</h4>
+                                <div id="effectSizeAnalysis">
+                                    <!-- Effect size analysis will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS for Batch Dashboard -->
+    <script src="{{ url_for('static', filename='js/batch_dashboard.js') }}"></script>
+</body>
+</html>

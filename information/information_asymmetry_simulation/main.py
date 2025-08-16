@@ -29,12 +29,19 @@ def main():
                         help='Logging level')
     parser.add_argument('--output-dir', type=str, default='logs',
                         help='Directory for simulation outputs')
+    parser.add_argument('--sim-id', type=str, default=None,
+                        help='Unique simulation ID (used by batch runner)')
     
     args = parser.parse_args()
     
     # Setup logging
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = Path(args.output_dir) / f"simulation_{timestamp}"
+    if args.sim_id:
+        # Use provided simulation ID (from batch runner)
+        log_dir = Path(args.output_dir) / args.sim_id
+    else:
+        # Generate timestamp-based ID for standalone runs
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = Path(args.output_dir) / f"simulation_{timestamp}"
     log_dir.mkdir(parents=True, exist_ok=True)
     
     setup_logging(log_dir, args.log_level)
@@ -67,9 +74,9 @@ def main():
     print(f"Total rounds: {results['total_rounds']}")
     print(f"Total tasks completed: {results['total_tasks_completed']}")
     print(f"Total messages sent: {results['total_messages']}")
-    print("\nFinal Rankings:")
-    for i, (agent_id, score) in enumerate(results['final_rankings'].items(), 1):
-        print(f"{i}. Agent {agent_id}: {score} points")
+    print("\nFinal Revenue Board:")
+    for i, (agent_id, revenue) in enumerate(results['final_revenue_board'].items(), 1):
+        print(f"{i}. Agent {agent_id}: ${revenue:,}")
 
 
 if __name__ == "__main__":

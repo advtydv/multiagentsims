@@ -4,7 +4,7 @@ from .simulation import SimulationManager
 from .agent import Agent
 from .tasks import TaskManager, InformationManager
 from .communication import CommunicationSystem
-from .scoring import ScoringSystem
+from .scoring import RevenueSystem
 from .logger import SimulationLogger, setup_logging
 
 __all__ = [
@@ -13,7 +13,7 @@ __all__ = [
     'TaskManager',
     'InformationManager',
     'CommunicationSystem',
-    'ScoringSystem',
+    'RevenueSystem',
     'SimulationLogger',
     'setup_logging'
 ]

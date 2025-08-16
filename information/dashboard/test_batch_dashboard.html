@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Batch Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <h1>Test Chart.js v3 Horizontal Bar</h1>
+    <canvas id="testChart" width="400" height="200"></canvas>
+    
+    <script>
+        const ctx = document.getElementById('testChart');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Strategy 1', 'Strategy 2', 'Strategy 3'],
+                datasets: [{
+                    label: 'Win Rate (%)',
+                    data: [65, 45, 30],
+                    backgroundColor: ['rgba(255, 99, 132, 0.5)', 'rgba(54, 162, 235, 0.5)', 'rgba(255, 206, 86, 0.5)'],
+                    borderColor: ['rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(255, 206, 86)'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                indexAxis: 'y',  // This makes it horizontal
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Strategy Win Rates'
+                    }
+                }
+            }
+        });
+        
+        console.log('Chart created successfully!');
+    </script>
+</body>
+</html>
