@@ -552,8 +552,8 @@ class SimulationManager:
         
         revenue_board = self.revenue_system.get_revenue_board()
         self.logger.info("  - Current revenue board:")
-        for i, (agent_id, revenue) in enumerate(revenue_board.items(), 1):
-            self.logger.info(f"    {i}. {agent_id}: ${revenue:,}")
+        for agent_id, revenue in revenue_board.items():
+            self.logger.info(f"    {agent_id}: ${revenue:,}")
     
     def _aggregate_cooperation_scores(self, collected_reports: Dict[str, Dict[str, Any]]):
         """Aggregate cooperation scores from all agent reports"""

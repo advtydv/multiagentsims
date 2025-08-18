@@ -4,6 +4,7 @@ Revenue tracking system for the simulation
 
 from typing import Dict, List, Any
 from collections import defaultdict
+import random
 
 
 class RevenueSystem:
@@ -59,15 +60,23 @@ class RevenueSystem:
         
         # Return as ordered dict
         return dict(sorted_agents)
+    
+    def get_revenue_board_randomized(self) -> Dict[str, int]:
+        """Get revenue board in random order (for display purposes)"""
+        # Get all agents and their revenues
+        agents_list = list(self.revenue.items())
+        # Shuffle the list
+        random.shuffle(agents_list)
+        # Return as dict
+        return dict(agents_list)
         
     def get_revenue_leaderboard(self) -> List[Dict[str, Any]]:
-        """Get detailed revenue leaderboard information"""
+        """Get detailed revenue information for all agents"""
         revenue_board = self.get_revenue_board()
         leaderboard = []
         
-        for position, (agent_id, revenue) in enumerate(revenue_board.items(), 1):
+        for agent_id, revenue in revenue_board.items():
             leaderboard.append({
-                'position': position,
                 'agent_id': agent_id,
                 'revenue': revenue,
                 'tasks_completed': len(self.task_completions[agent_id])
@@ -78,12 +87,10 @@ class RevenueSystem:
     def get_agent_stats(self, agent_id: str) -> Dict[str, Any]:
         """Get detailed statistics for a specific agent"""
         revenue_board = self.get_revenue_board()
-        agent_position = list(revenue_board.keys()).index(agent_id) + 1 if agent_id in revenue_board else None
         
         return {
             'agent_id': agent_id,
             'revenue': self.revenue[agent_id],
-            'position': agent_position,
             'total_agents': len(revenue_board),
             'tasks_completed': len(self.task_completions[agent_id]),
             'completion_history': self.task_completions[agent_id]
