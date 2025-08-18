@@ -12,6 +12,7 @@ from datetime import datetime
 
 from simulation.simulation import SimulationManager
 from simulation.logger import setup_logging, SimulationLogger
+from simulation.analysis import run_analysis
 
 
 def load_config(config_path: str) -> dict:
@@ -54,12 +55,17 @@ def main():
     # Initialize simulation logger
     sim_logger = SimulationLogger(log_dir)
     
-    # Create and run simulation
-    logger.info("Initializing simulation...")
-    simulation = SimulationManager(config, sim_logger)
-    
-    logger.info("Starting simulation...")
-    results = simulation.run()
+    try:
+        # Create and run simulation
+        logger.info("Initializing simulation...")
+        simulation = SimulationManager(config, sim_logger)
+        
+        logger.info("Starting simulation...")
+        results = simulation.run()
+    except Exception as e:
+        # Ensure logger is closed even on error
+        sim_logger.close()
+        raise
     
     # Save results
     results_path = log_dir / "results.yaml"
@@ -68,6 +74,30 @@ def main():
     
     logger.info(f"Simulation completed. Results saved to {results_path}")
     logger.info(f"Logs available in {log_dir}")
+    
+    # Run post-simulation analysis
+    logger.info("Running post-simulation analysis...")
+    try:
+        analysis_results = run_analysis(log_dir)
+        logger.info("Analysis completed successfully")
+        
+        # Log key metrics
+        metrics = analysis_results.get('metrics', {})
+        logger.info(f"Total tasks completed: {metrics.get('total_tasks_completed', 0)}")
+        
+        gini = metrics.get('revenue_distribution', {}).get('gini_coefficient')
+        if gini is not None:
+            logger.info(f"Revenue distribution Gini coefficient: {gini}")
+        
+        comm_efficiency = metrics.get('communication_efficiency', {}).get('messages_per_completed_task')
+        if comm_efficiency:
+            logger.info(f"Communication efficiency: {comm_efficiency} messages per task")
+            
+    except Exception as e:
+        logger.error(f"Failed to run analysis: {e}")
+        # Don't fail the entire simulation if analysis fails
+        import traceback
+        logger.debug(f"Analysis error traceback: {traceback.format_exc()}")
     
     # Print summary
     print("\n=== Simulation Summary ===")

@@ -255,16 +255,22 @@ class BatchSimulationRunner:
         completed = sum(1 for s in self.batch_metadata["simulations"] if s["status"] == "completed")
         failed = sum(1 for s in self.batch_metadata["simulations"] if s["status"] != "completed")
         
-        # Collect all results
+        # Collect all results and analysis
         all_results = []
+        all_analyses = []
         agent_revenues = {}
         task_counts = []
         message_counts = []
+        gini_coefficients = []
+        communication_efficiencies = []
+        negotiation_cycle_times = []
+        zero_revenue_counts = []
         
         for sim in self.batch_metadata["simulations"]:
             if sim["status"] == "completed":
                 sim_dir = self.batch_dir / sim["id"]
                 results_file = sim_dir / "results.yaml"
+                analysis_file = sim_dir / "analysis_results.json"
                 
                 if results_file.exists():
                     with open(results_file, 'r') as f:
@@ -280,6 +286,33 @@ class BatchSimulationRunner:
                             if agent not in agent_revenues:
                                 agent_revenues[agent] = []
                             agent_revenues[agent].append(revenue)
+                
+                # Collect analysis metrics if available
+                if analysis_file.exists():
+                    with open(analysis_file, 'r') as f:
+                        analysis = json.load(f)
+                        all_analyses.append(analysis)
+                        
+                        metrics = analysis.get('metrics', {})
+                        
+                        # Collect Gini coefficients
+                        gini = metrics.get('revenue_distribution', {}).get('gini_coefficient')
+                        if gini is not None:
+                            gini_coefficients.append(gini)
+                        
+                        # Collect communication efficiency
+                        comm_eff = metrics.get('communication_efficiency', {}).get('messages_per_completed_task')
+                        if comm_eff and comm_eff != float('inf'):
+                            communication_efficiencies.append(comm_eff)
+                        
+                        # Collect negotiation cycle times
+                        cycle_time = metrics.get('negotiation_cycle_time', {}).get('average_negotiation_cycle_time')
+                        if cycle_time is not None:
+                            negotiation_cycle_times.append(cycle_time)
+                        
+                        # Collect zero revenue counts
+                        zero_count = metrics.get('agents_with_zero_revenue', {}).get('count', 0)
+                        zero_revenue_counts.append(zero_count)
         
         # Calculate summary statistics
         summary = {
@@ -333,6 +366,39 @@ class BatchSimulationRunner:
                     winner_counts[winner] = winner_counts.get(winner, 0) + 1
             
             summary["winner_distribution"] = winner_counts
+            
+            # Analysis metrics aggregation
+            if gini_coefficients:
+                summary["gini_coefficient_statistics"] = {
+                    "mean": statistics.mean(gini_coefficients),
+                    "std": statistics.stdev(gini_coefficients) if len(gini_coefficients) > 1 else 0,
+                    "min": min(gini_coefficients),
+                    "max": max(gini_coefficients)
+                }
+            
+            if communication_efficiencies:
+                summary["communication_efficiency_statistics"] = {
+                    "mean": statistics.mean(communication_efficiencies),
+                    "std": statistics.stdev(communication_efficiencies) if len(communication_efficiencies) > 1 else 0,
+                    "min": min(communication_efficiencies),
+                    "max": max(communication_efficiencies)
+                }
+            
+            if negotiation_cycle_times:
+                summary["negotiation_cycle_time_statistics"] = {
+                    "mean": statistics.mean(negotiation_cycle_times),
+                    "std": statistics.stdev(negotiation_cycle_times) if len(negotiation_cycle_times) > 1 else 0,
+                    "min": min(negotiation_cycle_times),
+                    "max": max(negotiation_cycle_times)
+                }
+            
+            if zero_revenue_counts:
+                summary["zero_revenue_agent_statistics"] = {
+                    "mean": statistics.mean(zero_revenue_counts),
+                    "std": statistics.stdev(zero_revenue_counts) if len(zero_revenue_counts) > 1 else 0,
+                    "min": min(zero_revenue_counts),
+                    "max": max(zero_revenue_counts)
+                }
         
         # Save summary
         summary_path = self.batch_dir / "aggregate_summary.json"
@@ -396,6 +462,16 @@ class BatchSimulationRunner:
                                      key=lambda x: x[1], reverse=True):
                 win_rate = wins / summary['completed_simulations'] * 100
                 print(f"  {agent}: {wins} wins ({win_rate:.1f}%)")
+        
+        if 'gini_coefficient_statistics' in summary:
+            print(f"\nRevenue Distribution (Gini Coefficient):")
+            print(f"  Mean: {summary['gini_coefficient_statistics']['mean']:.3f}")
+            print(f"  Range: {summary['gini_coefficient_statistics']['min']:.3f} - {summary['gini_coefficient_statistics']['max']:.3f}")
+        
+        if 'communication_efficiency_statistics' in summary:
+            print(f"\nCommunication Efficiency (Messages/Task):")
+            print(f"  Mean: {summary['communication_efficiency_statistics']['mean']:.1f}")
+            print(f"  Range: {summary['communication_efficiency_statistics']['min']:.1f} - {summary['communication_efficiency_statistics']['max']:.1f}")
         
         print(f"\nResults saved to: {self.batch_dir}")
         print(f"View in dashboard: http://localhost:8080/batch")

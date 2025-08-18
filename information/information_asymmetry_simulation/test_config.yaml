@@ -1,0 +1,40 @@
+# Test configuration for quick simulation with analysis
+simulation:
+  rounds: 3  # Quick test with just 3 rounds
+  agents: 4  # Fewer agents for faster testing
+  show_full_revenue: true
+  report_frequency: 0
+  
+agents:
+  model: "gpt-4o-mini"  # Use a fast model for testing
+  uncooperative_count: 1  # Include one uncooperative agent
+  
+tasks:
+  min_info_pieces: 2  # Fewer pieces needed for quicker completion
+  max_info_pieces: 3
+  initial_tasks_per_agent: 1
+  new_task_on_completion: true
+  task_templates:
+    - "Calculate the quarterly revenue by combining {info_pieces}"
+    - "Prepare the report using data from {info_pieces}"
+  
+information:
+  total_pieces: 12  # Fewer pieces for simpler simulation
+  pieces_per_agent: 3
+  info_templates:
+    - "Q{n} sales data"
+    - "Department {n} budget"
+    - "Region {n} market data"
+  
+revenue:
+  task_completion: 10000
+  bonus_for_first: 3000
+  incorrect_value_penalty: 0.3
+  
+communication:
+  max_actions_per_turn: 3  # Limit actions for cleaner testing
+  
+logging:
+  log_all_messages: true
+  log_agent_reasoning: true
+  log_task_attempts: true

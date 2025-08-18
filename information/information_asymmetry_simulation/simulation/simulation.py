@@ -120,6 +120,9 @@ class SimulationManager:
         
         self.sim_logger.log_simulation_end(results)
         
+        # Ensure logger is properly closed
+        self.sim_logger.close()
+        
         return results
     
     def _run_round(self) -> Dict[str, Any]:
