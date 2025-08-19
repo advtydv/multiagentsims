@@ -3,12 +3,12 @@
 simulation:
   rounds: 10
   agents: 10
-  show_full_revenue: false  # If true, agents see all revenue. If false, only their own revenue position.
+  show_full_revenue: true  # If true, agents see all revenue. If false, only their own revenue position.
   report_frequency: 0  # Request strategic reports every N rounds (0 to disable)
   
 agents:
   # LLM configuration for agents
-  model: "o3"  # Can be changed to any OpenAI-compatible model o3-mini-2025-01-31 gpt-4.1-mini-2025-04-14
+  model: "gpt-5"  # Can be changed to any OpenAI-compatible model o3-mini-2025-01-31 gpt-4.1-mini-2025-04-14
   # temperature: 0.7  # Note: o3-mini doesn't support temperature parameter
   uncooperative_count: 0  # Number of uncooperative agents (0 = all neutral/standard agents)
   
@@ -31,6 +31,10 @@ information:
   # Information distribution
   total_pieces: 40  # Total unique information pieces
   pieces_per_agent: 4  # How many pieces each agent starts with
+  
+  # Distribution mode
+  unique_distribution: false  # If true, each piece exists exactly once (no duplicates)
+                              # If false, pieces can be held by multiple agents (1-3 copies)
   
   # Information examples
   info_templates:

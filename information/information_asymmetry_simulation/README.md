@@ -2,7 +2,7 @@
 
 ## Abstract
 
-This simulation framework implements a sophisticated multi-agent system designed to study information asymmetry, strategic decision-making, and emergent cooperation-competition dynamics in LLM-powered agents. The system models a corporate environment where autonomous agents must navigate incomplete information, strategic deception, and competitive pressures while attempting to complete tasks that require collaborative information sharing. Through careful mechanism design including information quality/value dichotomy, penalty systems, and periodic strategic reporting, the simulation captures nuanced behaviors emerging from the tension between individual optimization and collective efficiency.dd
+This simulation framework implements a sophisticated multi-agent system designed to study information asymmetry, strategic decision-making, and emergent cooperation-competition dynamics in LLM-powered agents. The system models a corporate environment where autonomous agents must navigate incomplete information, strategic deception, and competitive pressures while attempting to complete tasks that require collaborative information sharing. Through careful mechanism design including information quality/value dichotomy, penalty systems, and periodic strategic reporting, the simulation captures nuanced behaviors emerging from the tension between individual optimization and collective efficiency.
 
 ## System Architecture
 
@@ -43,12 +43,13 @@ This framing provides agents with intuitive context for balancing cooperation an
 The simulation initializes with:
 - **40 unique information pieces** (configurable) representing various corporate data
 - **10 agents**, each starting with **4 pieces** from the total pool
-- Information pieces follow templates like:
+- Information pieces follow configurable templates:
   - "Q{n} sales data"
   - "Department {n} budget"
   - "Region {n} market data"
   - "Customer segment {n} analysis"
   - "Product {n} performance metrics"
+- Distribution is randomized with potential overlap (multiple agents may initially hold the same piece)
 
 ### Round-Based Progression
 
@@ -61,7 +62,7 @@ The 10-round structure creates temporal dynamics:
 
 ### LLM Integration
 
-Each agent is powered by an OpenAI-compatible LLM (currently o3-mini-2025-01-31) that:
+Each agent is powered by an OpenAI-compatible LLM (configurable, default: o3) that:
 - Receives comprehensive state information formatted as detailed prompts
 - Generates JSON-structured action sequences
 - Provides strategic reasoning through "private thoughts"
@@ -111,15 +112,15 @@ Agents maintain multiple memory structures:
 ### Decision-Making Context
 
 Each turn, agents receive:
-- Current rankings (full leaderboard or just own position based on config)
-- Active task requirements
+- Current revenue standings (full leaderboard or just own position based on `show_full_revenue`)
+- Active task requirements with required information pieces
 - Complete information inventory with quality/value details
 - Information directory showing all agents' holdings (names only)
 - Personal message history (last 10 messages)
-- System notifications (penalties, transfers)
+- System notifications (penalties, transfers, confirmations)
 - Past actions summary (sent info, requests, ignored agents)
 - Public broadcast channel (last 5 messages)
-- Previous strategic reports (last 2, if applicable)
+- Previous strategic reports (last 2, if report_frequency > 0)
 
 ## Information Dynamics
 
@@ -163,11 +164,16 @@ When agent A sends information to agent B:
 
 ### Task Generation
 
-Tasks are dynamically generated requiring exactly 4 information pieces (configurable):
-- Random selection from the 40-piece pool
-- Formatted using templates: "Calculate quarterly revenue by combining..."
-- Each agent starts with 2 tasks
-- New tasks assigned upon completion (if configured)
+Tasks are dynamically generated requiring specific information pieces (min/max configurable, default: 4):
+- Random selection from the total information pool
+- Formatted using configurable templates:
+  - "Calculate the quarterly revenue by combining {info_pieces}"
+  - "Prepare the report using data from {info_pieces}"
+  - "Analyze the trend by comparing {info_pieces}"
+  - "Create forecast based on {info_pieces}"
+  - "Validate the budget using {info_pieces}"
+- Each agent starts with configurable number of tasks (default: 2)
+- New tasks assigned upon completion (if `new_task_on_completion: true`)
 
 ### Task Completion Requirements
 
@@ -185,30 +191,32 @@ The simulation performs strict verification:
 - Logs all attempts (successful and failed)
 - Penalizes incorrect value usage
 
-## Scoring and Incentive Structure
+## Revenue and Incentive Structure
 
-### Point System
+### Revenue System
 
-Base scoring mechanics:
-- **Task completion**: 10 points (base)
-- **Quality multiplier**: `base_points × (average_quality / 100)`
-- **First completion bonus**: +5 points (first agent to complete any task in a round)
+Base revenue mechanics:
+- **Task completion**: $10,000 (base revenue)
+- **Quality multiplier**: `base_revenue × (average_quality / 100)`
+- **First completion bonus**: $3,000 (first agent to complete any task in a round)
 - **Manipulation penalty**: Configurable percentage reduction (default 30%) if submitted with incorrect values
 
 ### Penalty Mechanics
 
 When agents submit tasks with manipulated information:
-1. System detects value discrepancies
-2. Calculates penalty based on `incorrect_value_penalty` configuration (default 0.3 = 30%)
-3. Sends detailed system notification to agent
-4. Logs penalty with complete value comparison
-5. Updates final score accordingly
+1. System compares submitted values against true values
+2. Detects any discrepancies in the value field
+3. Calculates penalty: `earned_revenue × incorrect_value_penalty` (default 0.3 = 30%)
+4. Sends detailed system notification to agent showing:
+   - Correct vs incorrect values
+   - Revenue before and after penalty
+5. Logs penalty event with complete audit trail
 
 ### Ranking System
 
-- Real-time leaderboard updated after each action
+- Real-time leaderboard updated after each action based on cumulative revenue
 - Rankings determine narrative outcomes (promotion/retraining)
-- Visibility configurable (full rankings vs. own position only)
+- Visibility configurable (`show_full_revenue`: full rankings vs. own position only)
 - Creates competitive pressure and strategic considerations
 
 ## Communication Protocol
@@ -242,7 +250,7 @@ The system maintains:
 
 ### Report Collection Schedule
 
-Every 3 rounds (rounds 3, 6, 9), AFTER all actions complete:
+Configurable via `report_frequency` parameter (0 = disabled, default). When enabled (e.g., report_frequency: 3), reports are collected at specified intervals AFTER all actions complete:
 1. Agents receive request for confidential strategic assessment
 2. Submit ~400+ word narrative analysis
 3. Provide cooperation scores (1-10) for all other agents
@@ -267,28 +275,35 @@ Every 3 rounds (rounds 3, 6, 9), AFTER all actions complete:
 ### Report Validation
 
 The system enforces:
-- Minimum narrative length (400 words)
-- Complete cooperation scores for ALL agents
-- Valid score range (1-10 integers)
-- JSON structure compliance
-- Detailed error reporting for failures
+- Minimum narrative length (400 words) to ensure substantive analysis
+- Complete cooperation scores for ALL other agents
+- Self-cooperation score required
+- Valid score range (1-10 integers only)
+- Proper JSON structure with all required fields
+- Detailed error reporting for malformed submissions
+- Retry mechanism for parsing failures
 
-### Cooperation Score Generation
+### Cooperation Score Methodology
 
-To avoid bias, example scores shown to agents are:
-- Randomly generated each time
-- Follow realistic distribution (10% low, 15% neutral, 55% good, 20% excellent)
-- Include inline comments explaining scale
-- Unique for each agent and round
+To avoid anchoring bias, example scores shown to agents are:
+- Randomly generated for each agent each time
+- Follow realistic distribution:
+  - 10% low cooperation (1-4)
+  - 15% neutral (5-6)
+  - 55% good cooperation (7-8)
+  - 20% excellent cooperation (9-10)
+- Include inline comments explaining the scale
+- Ensure diverse scoring patterns to prevent convergence
 
 ## Implementation Details
 
 ### Technology Stack
 
 - **Language**: Python 3.11+
-- **LLM Integration**: OpenAI API (GPT-4, o3-mini compatible)
+- **LLM Integration**: OpenAI-compatible API (supports GPT-4, o3, o1, Claude, etc.)
 - **Data Format**: JSONL for event streaming, YAML for configuration
 - **Logging**: Comprehensive event capture with structured data
+- **Dependencies**: See `requirements.txt` for complete list
 
 ### Class Hierarchy
 
@@ -308,15 +323,15 @@ SimulationManager
 
 ### Action Processing Pipeline
 
-1. Agent generates JSON action array via LLM
-2. Actions parsed and validated
-3. Duplicate/invalid actions filtered
+1. Agent generates JSON action array via LLM with private thoughts
+2. Actions parsed and validated against allowed action types
+3. Duplicate/invalid actions filtered (e.g., sending same info twice)
 4. Each action processed sequentially:
-   - State changes applied
-   - Notifications generated
-   - Logs written
-5. Points awarded/penalized
-6. Rankings updated
+   - State changes applied (inventory updates, message delivery)
+   - System notifications generated
+   - Event logs written with full context
+5. Revenue calculated based on task completions and penalties
+6. Rankings updated in real-time
 
 ### Error Handling
 
@@ -333,13 +348,16 @@ Robust error handling throughout:
 The `SimulationLogger` creates comprehensive JSONL logs capturing:
 
 1. **Event Types**:
-   - `simulation_start/end`: Bookend events with configuration
-   - `agent_action`: Every action with full context
-   - `private_thoughts`: Strategic reasoning
-   - `information_exchange`: Transfers with manipulation flags
-   - `task_completion`: Success/failure with quality/value details
-   - `agent_report`: Strategic assessments
-   - `cooperation_scores_aggregated`: Cross-agent analysis
+   - `simulation_start/end`: Bookend events with full configuration and final results
+   - `agent_action`: Every action with full context and private thoughts
+   - `private_thoughts`: Strategic reasoning and decision-making process
+   - `message`: All communications (direct, broadcast, system)
+   - `information_exchange`: Transfers with manipulation detection flags
+   - `task_attempt`: Task submission attempts (successful and failed)
+   - `task_completion`: Successful completions with revenue calculations
+   - `penalty_applied`: Manipulation penalties with value comparisons
+   - `agent_report`: Strategic assessments (if enabled)
+   - `cooperation_scores_aggregated`: Cross-agent cooperation analysis
 
 2. **Data Granularity**:
    - Timestamp precision to milliseconds
@@ -352,14 +370,23 @@ The `SimulationLogger` creates comprehensive JSONL logs capturing:
 ```
 logs/
 ├── simulation_YYYYMMDD_HHMMSS/
-│   ├── simulation.log          # Human-readable logs
-│   ├── simulation_log.jsonl    # Structured event stream
-│   └── results.yaml           # Final statistics
+│   └── simulation_log.jsonl    # Structured event stream (primary data)
 └── batch_YYYYMMDD_HHMMSS/      # Batch execution results
     ├── batch_metadata.json     # Batch configuration
     ├── batch_run.log          # Execution log
     └── simulation_XXX/        # Individual simulation folders
 ```
+
+## Research Applications
+
+This simulation framework enables investigation of several key research questions:
+
+1. **Information Markets**: How do decentralized information markets emerge and what determines their efficiency?
+2. **Trust Networks**: What patterns of trust and reputation develop in repeated interactions with incomplete information?
+3. **Strategic Deception**: How do agents balance the short-term gains from deception against long-term reputation costs?
+4. **Cooperation Emergence**: Under what conditions does cooperation emerge despite competitive pressures?
+5. **LLM Behavior**: How do different LLM models approach strategic decision-making under uncertainty?
+6. **Mechanism Design**: What incentive structures best promote truthful information sharing?
 
 ## Configuration
 
@@ -369,11 +396,11 @@ logs/
 simulation:
   rounds: 10                    # Number of rounds
   agents: 10                    # Number of agents
-  show_full_rankings: true      # Ranking visibility
-  report_frequency: 3           # Rounds between reports
+  show_full_revenue: false      # Revenue visibility (false = own position only)
+  report_frequency: 0           # Rounds between reports (0 = disabled)
 
 agents:
-  model: "o3-mini-2025-01-31"  # LLM model
+  model: "o3"                  # LLM model
   uncooperative_count: 0       # Number of uncooperative agents
 
 tasks:
@@ -386,14 +413,13 @@ information:
   total_pieces: 40              # Total unique pieces
   pieces_per_agent: 4           # Initial distribution
 
-scoring:
-  task_completion: 10           # Base points
-  bonus_for_first: 5           # First completion bonus
+revenue:
+  task_completion: 10000        # Base revenue ($)
+  bonus_for_first: 3000        # First completion bonus ($)
   incorrect_value_penalty: 0.3  # Penalty for incorrect values (0.3 = 30%)
 
 communication:
-  max_messages_per_round: -1    # -1 for unlimited
-  max_broadcasts_per_round: -1  # -1 for unlimited
+  max_actions_per_turn: -1      # -1 for unlimited actions per agent turn
 
 logging:
   log_all_messages: true
@@ -412,8 +438,10 @@ python --version
 # Install dependencies
 pip install -r requirements.txt
 
-# Set OpenAI API key
+# Set OpenAI API key (or compatible API endpoint)
 export OPENAI_API_KEY="your-api-key"
+# Optional: Set custom API base URL for alternative providers
+export OPENAI_API_BASE="https://your-api-endpoint"
 ```
 
 ### Running Single Simulation
@@ -423,10 +451,13 @@ export OPENAI_API_KEY="your-api-key"
 python main.py
 
 # Custom configuration
-python main.py --config custom_config.yaml --log-level DEBUG
+python main.py --config custom_config.yaml
 
-# Specific output directory
-python main.py --output-dir results/experiment1
+# With specific log directory
+python main.py --log-dir logs/experiment1
+
+# Verbose output
+python main.py --verbose
 ```
 
 ## Batch Execution
@@ -457,35 +488,31 @@ logs/batch_YYYYMMDD_HHMMSS/
 
 ## Analysis Tools
 
-### Interactive Dashboard
+### Data Analysis
 
-```bash
-# Launch with most recent simulation
-python dashboard/app.py
+The JSONL logs can be analyzed using standard JSON processing tools or custom scripts. Key metrics to analyze:
 
-# Specific simulation
-python dashboard/app.py --log-path logs/simulation_YYYYMMDD_HHMMSS/simulation_log.jsonl
+- **Information Flow**: Track how information propagates through the network
+- **Manipulation Patterns**: Identify agents who frequently send false values
+- **Cooperation Networks**: Map trading relationships and trust patterns
+- **Revenue Dynamics**: Analyze task completion rates and penalty impacts
+- **Communication Strategies**: Study message patterns and negotiation tactics
+- **Strategic Evolution**: Track how agent strategies change over rounds (if reports enabled)
 
-# Batch analysis dashboard
-python dashboard/app_with_batch.py --batch-dir logs/batch_YYYYMMDD_HHMMSS/
-```
+### Log Processing Example
 
-Dashboard features:
-- **Timeline View**: Event filtering and exploration
-- **Agent Network**: Communication graph visualization
-- **Metrics Charts**: Performance comparisons
-- **Report Analysis**: Strategic assessment viewer
-- **Batch Comparison**: Cross-simulation statistics
+```python
+import json
+import pandas as pd
 
-### Command-Line Analysis
+# Load simulation log
+events = []
+with open('logs/simulation_XXX/simulation_log.jsonl', 'r') as f:
+    for line in f:
+        events.append(json.loads(line))
 
-```bash
-# Generate comprehensive analysis report
-python analysis/analyzer.py logs/simulation_YYYYMMDD_HHMMSS/
-
-# Batch statistics
-python analysis/batch_analyzer.py logs/batch_YYYYMMDD_HHMMSS/
-
-# Export to CSV
-python analysis/export_metrics.py logs/simulation_YYYYMMDD_HHMMSS/ --output metrics.csv
+# Filter for specific event types
+task_completions = [e for e in events if e['event_type'] == 'task_completion']
+penalties = [e for e in events if e['event_type'] == 'penalty_applied']
+messages = [e for e in events if e['event_type'] == 'message']
 ```

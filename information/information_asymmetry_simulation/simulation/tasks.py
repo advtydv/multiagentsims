@@ -116,31 +116,57 @@ class InformationManager:
         """Distribute information pieces among agents"""
         distribution = [[] for _ in range(num_agents)]
         
-        # Ensure each piece is assigned to at least one agent
-        # Create new InformationPiece objects to avoid shared references
-        for i, piece in enumerate(self.information_pieces):
-            agent_idx = i % num_agents
-            # Create a new InformationPiece with same name, quality, and value
-            new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
-            distribution[agent_idx].append(new_piece)
-            
-        # Create a pool of pieces for additional distribution
-        # Each agent can potentially get any piece (with same quality and value as original)
-        piece_pool = []
-        for _ in range(2):  # Create 2x the pieces for distribution
-            for piece in self.information_pieces:
-                # Create new instances with same properties
-                new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
-                piece_pool.append(new_piece)
-        random.shuffle(piece_pool)
+        # Check for unique distribution mode
+        unique_distribution = self.config.get('unique_distribution', False)
         
-        for i in range(num_agents):
-            while len(distribution[i]) < self.pieces_per_agent and piece_pool:
-                candidate_piece = piece_pool.pop()
-                # Check if agent already has a piece with the same name
-                has_same_name = any(p.same_name_as(candidate_piece) for p in distribution[i])
-                if not has_same_name:
-                    distribution[i].append(candidate_piece)
+        if unique_distribution:
+            # Unique mode: each piece exists exactly once
+            # This requires exactly total_pieces = num_agents * pieces_per_agent
+            expected_total = num_agents * self.pieces_per_agent
+            if self.total_pieces != expected_total:
+                raise ValueError(
+                    f"Unique distribution requires exactly {expected_total} pieces "
+                    f"({num_agents} agents × {self.pieces_per_agent} pieces/agent), "
+                    f"but config has {self.total_pieces} pieces"
+                )
+            
+            # Shuffle all pieces and deal them out like cards
+            shuffled_pieces = self.information_pieces.copy()
+            random.shuffle(shuffled_pieces)
+            
+            # Deal pieces to agents in round-robin fashion
+            for i, piece in enumerate(shuffled_pieces):
+                agent_idx = i % num_agents
+                # Create a new InformationPiece with same properties
+                new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
+                distribution[agent_idx].append(new_piece)
+        else:
+            # Original distribution mode: pieces can be held by multiple agents
+            # Ensure each piece is assigned to at least one agent
+            # Create new InformationPiece objects to avoid shared references
+            for i, piece in enumerate(self.information_pieces):
+                agent_idx = i % num_agents
+                # Create a new InformationPiece with same name, quality, and value
+                new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
+                distribution[agent_idx].append(new_piece)
+                
+            # Create a pool of pieces for additional distribution
+            # Each agent can potentially get any piece (with same quality and value as original)
+            piece_pool = []
+            for _ in range(2):  # Create 2x the pieces for distribution
+                for piece in self.information_pieces:
+                    # Create new instances with same properties
+                    new_piece = InformationPiece(name=piece.name, quality=piece.quality, value=piece.value)
+                    piece_pool.append(new_piece)
+            random.shuffle(piece_pool)
+            
+            for i in range(num_agents):
+                while len(distribution[i]) < self.pieces_per_agent and piece_pool:
+                    candidate_piece = piece_pool.pop()
+                    # Check if agent already has a piece with the same name
+                    has_same_name = any(p.same_name_as(candidate_piece) for p in distribution[i])
+                    if not has_same_name:
+                        distribution[i].append(candidate_piece)
                     
         # Update tracking
         for i in range(num_agents):
