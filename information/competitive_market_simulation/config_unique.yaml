@@ -1,0 +1,61 @@
+# Information Asymmetry Simulation Configuration - Unique Distribution Mode
+
+simulation:
+  rounds: 10
+  agents: 10
+  show_full_revenue: true  # If true, agents see all revenue. If false, only their own revenue position.
+  report_frequency: 0  # Request strategic reports every N rounds (0 to disable)
+  
+agents:
+  # LLM configuration for agents
+  model: "o3-mini-2025-01-31"  # Can be changed to any OpenAI-compatible model o3-mini-2025-01-31 gpt-4.1-mini-2025-04-14
+  # temperature: 0.7  # Note: o3-mini doesn't support temperature parameter
+  uncooperative_count: 0  # Number of uncooperative agents (0 = all neutral/standard agents)
+  
+tasks:
+  # Task configuration
+  min_info_pieces: 4  # Minimum information pieces needed for a task
+  max_info_pieces: 4  # Maximum information pieces needed for a task
+  initial_tasks_per_agent: 2
+  new_task_on_completion: true
+  
+  # Task examples (can be expanded)
+  task_templates:
+    - "Calculate the quarterly revenue by combining {info_pieces}"
+    - "Prepare the report using data from {info_pieces}"
+    - "Analyze the trend by comparing {info_pieces}"
+    - "Create forecast based on {info_pieces}"
+    - "Validate the budget using {info_pieces}"
+  
+information:
+  # Information distribution
+  total_pieces: 40  # Total unique information pieces
+  pieces_per_agent: 4  # How many pieces each agent starts with
+  
+  # Distribution mode - UNIQUE DISTRIBUTION ENABLED
+  unique_distribution: true  # Each piece exists exactly once (no duplicates)
+  
+  # Information examples
+  info_templates:
+    - "Q{n} sales data"
+    - "Customer segment {n} analysis"
+    - "Product {n} performance metrics"
+    - "Region {n} market data"
+    - "Department {n} budget"
+  
+revenue:
+  # Revenue (in dollars) for different actions
+  task_completion: 10000  # $10,000 base revenue per task
+  bonus_for_first: 3000  # $3,000 bonus for completing a task first in a round
+  incorrect_value_penalty: 0.5  # Revenue reduction for submitting tasks with incorrect information values (0.5 = 50% penalty)
+  
+communication:
+  # Action limit per turn (set to -1 for unlimited)
+  # This limits the total number of actions an agent can take in their turn
+  max_actions_per_turn: -1
+  
+logging:
+  # What to log
+  log_all_messages: true
+  log_agent_reasoning: true  # If agents provide reasoning in their responses
+  log_task_attempts: true

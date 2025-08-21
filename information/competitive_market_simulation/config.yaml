@@ -1,0 +1,62 @@
+# Competitive Market Simulation Configuration
+
+simulation:
+  rounds: 10
+  agents: 10
+  show_full_revenue: true  # If true, agents see all competitor profits. If false, only their own profit position.
+  report_frequency: 0  # Request market analysis reports every N rounds (0 to disable)
+  
+agents:
+  # LLM configuration for agents
+  model: "gpt-5"  # Can be changed to any OpenAI-compatible model o3-mini-2025-01-31 gpt-4.1-mini-2025-04-14
+  # temperature: 0.7  # Note: o3-mini doesn't support temperature parameter
+  uncooperative_count: 0  # Number of disruptive agents (0 = all competitive market agents)
+  
+tasks:
+  # Contract configuration
+  min_info_pieces: 4  # Minimum information pieces needed for a contract
+  max_info_pieces: 4  # Maximum information pieces needed for a contract
+  initial_tasks_per_agent: 2  # Initial contracts per broker
+  new_task_on_completion: true  # New contract assigned upon completion
+  
+  # Contract templates (market opportunities)
+  task_templates:
+    - "Client contract: Deliver market analysis combining {info_pieces}"
+    - "Corporate order: Provide competitive intelligence using {info_pieces}"
+    - "Market research contract: Analyze trends with {info_pieces}"
+    - "Investment firm request: Create forecast using {info_pieces}"
+    - "Consulting contract: Validate strategy with {info_pieces}"
+  
+information:
+  # Information commodity distribution
+  total_pieces: 40  # Total market commodities
+  pieces_per_agent: 4  # Initial commodity holdings per broker
+  
+  # Distribution mode
+  unique_distribution: false  # If true, each commodity is unique (monopoly possible)
+                              # If false, commodities have multiple copies (competition)
+  
+  # Information commodity types
+  info_templates:
+    - "Q{n} sales data"
+    - "Customer segment {n} analysis"
+    - "Product {n} performance metrics"
+    - "Region {n} market data"
+    - "Department {n} budget"
+  
+revenue:
+  # Profit structure (in dollars) for market activities
+  task_completion: 10000  # $10,000 base profit per contract
+  bonus_for_first: 3000  # $3,000 first-mover advantage bonus
+  incorrect_value_penalty: 0.5  # Profit reduction for fraudulent information (0.5 = 50% penalty)
+  
+communication:
+  # Action limit per turn (set to -1 for unlimited)
+  # This limits the total number of actions an agent can take in their turn
+  max_actions_per_turn: -1
+  
+logging:
+  # Market activity logging
+  log_all_messages: true  # Log all trader communications
+  log_agent_reasoning: true  # Log competitive strategies
+  log_task_attempts: true  # Log contract completion attempts
